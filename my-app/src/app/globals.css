@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme {
+  --color-ui-bg-primary: var(--bg-primary);
+  --color-ui-bg-secondary: var(--bg-secondary);
+  --color-ui-bg-tirtury: var(--bg-tirtury);
+
+  --color-ui-card-primary: var(--card-primary);
+  --color-ui-card-secondary: var(--card-secondary);
+  --color-ui-card-tirtury: var(--card-tirtury);
+
+  --color-ui-text-primary: var(--text-primary);
+  --color-ui-text-primary-hover: var(--text-primary-hover);
+  --color-ui-text-secondary: var(--text-secondary);
+  --color-ui-text-secondary-hover: var(--text-secondary-hover);
+
+  --color-ui-btn-bg-primary: var(--btn-bg-primary);
+  --color-ui-btn-text-primary: var(--btn-text-primary);
+  --color-ui-btn-bg-primary-hover: var(--btn-bg-primary-hover);
+
+  --color-ui-btn-bg-secondary: var(--btn-bg-secondary);
+  --color-ui-btn-text-secondary: var(--btn-text-secondary);
+  --color-ui-btn-bg-secondary-hover: var(--btn-bg-secondary-hover);
+}
+
+:root {
+  --bg-primary: #faf6ec;
+  --bg-secondary: #f3ecd6;
+  --bg-tirtury: #ebe3c3;
+
+  --card-primary: #EFE1BE;
+  --card-secondary: #e5d4aa;
+  --card-tirtury: #dbc797;
+
+  --text-primary: #2c3525;
+  --text-primary-hover: #1a2116;
+  --text-secondary: #525e4a;
+  --text-secondary-hover: #3d4637;
+
+  --btn-bg-primary: #3F5B33;
+  --btn-text-primary: #faf6ec;
+  --btn-bg-primary-hover: #314728;
+
+  --btn-bg-secondary: #587949;
+  --btn-text-secondary: #faf6ec;
+  --btn-bg-secondary-hover: #46603a;
+}
+
+[data-theme="nature"] {
+  --bg-primary: #edf2eb;
+  --bg-secondary: #dce5d7;
+  --bg-tirtury: #c8d7c2;
+
+  --card-primary: #b5c9af;
+  --card-secondary: #9eb597;
+  --card-tirtury: #87a180;
+
+  --text-primary: #1b2816;
+  --text-primary-hover: #0d140a;
+  --text-secondary: #3b4e33;
+  --text-secondary-hover: #273522;
+
+  --btn-bg-primary: #23381e;
+  --btn-text-primary: #edf2eb;
+  --btn-bg-primary-hover: #172613;
+
+  --btn-bg-secondary: #426339;
+  --btn-text-secondary: #edf2eb;
+  --btn-bg-secondary-hover: #344f2d;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #161a15;
+  --bg-secondary: #212620;
+  --bg-tirtury: #2d332c;
+
+  --card-primary: #363d34;
+  --card-secondary: #454f43;
+  --card-tirtury: #556152;
+
+  --text-primary: #f3f5f2;
+  --text-primary-hover: #ffffff;
+  --text-secondary: #c4cac2;
+  --text-secondary-hover: #e2e8e0;
+
+  --btn-bg-primary: #6c8c5e;
+  --btn-text-primary: #161a15;
+  --btn-bg-primary-hover: #80a370;
+
+  --btn-bg-secondary: #4a6140;
+  --btn-text-secondary: #f3f5f2;
+  --btn-bg-secondary-hover: #5a754e;
+}
