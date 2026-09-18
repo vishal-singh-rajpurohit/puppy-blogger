@@ -2,7 +2,7 @@ import mongoose, { Schema, Model, Document, Types } from "mongoose"
 
 export type BlogStatus = "draft" | "published"
 
-export interface IBlog extends Document {
+export interface IPost extends Document {
     title: string
     slug: string
     author: Types.ObjectId
@@ -24,7 +24,7 @@ const discriminatorOptions = { discriminatorKey: "type", _id: false } as const
 
 const blockBaseSchema = new Schema({}, discriminatorOptions)
 
-const blogSchema = new Schema<IBlog>(
+const blogSchema = new Schema<IPost>(
     {
         title: { type: String, required: true, trim: true, maxlength: 200 },
         slug: {
@@ -113,13 +113,13 @@ bodyPath.discriminator(
     )
 )
 
-blogSchema.virtual("likesCount").get(function (this: IBlog) {
+blogSchema.virtual("likesCount").get(function (this: IPost) {
     return this.likes?.length ?? 0
 })
 
 
 blogSchema.pre("save", function () {
-    const doc = this as unknown as IBlog
+    const doc = this as unknown as IPost
     const blocks = doc.body as Array<Record<string, unknown>>
 
     if (!doc.excerpt) {
@@ -181,7 +181,7 @@ blogSchema.index({ status: 1, publishedAt: -1 })
 blogSchema.index({ author: 1, publishedAt: -1 })
 blogSchema.index({ title: "text", excerpt: "text" })
 
-const Blog: Model<IBlog> =
-    (mongoose.models.Blog as Model<IBlog>) || mongoose.model<IBlog>("Blog", blogSchema)
+const Blog: Model<IPost> =
+    (mongoose.models.Blog as Model<IPost>) || mongoose.model<IPost>("Blog", blogSchema)
 
 export default Blog
