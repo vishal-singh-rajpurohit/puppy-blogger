@@ -1,5 +1,6 @@
 import mongoose, { Schema, Model, Document, Types } from "mongoose"
 
+
 export type BlogStatus = "draft" | "published"
 
 export interface IPost extends Document {
@@ -12,12 +13,8 @@ export interface IPost extends Document {
     status: BlogStatus
     publishedAt?: Date
     readTime?: string
-    views: number
-    likes: Types.ObjectId[]
-    commentsCount: number
     createdAt: Date
     updatedAt: Date
-    likesCount: number // virtual
 }
 
 const discriminatorOptions = { discriminatorKey: "type", _id: false } as const
@@ -33,6 +30,7 @@ const blogSchema = new Schema<IPost>(
             unique: true,
             lowercase: true,
             trim: true,
+            default: "slug"
         },
         author: {
             type: Schema.Types.ObjectId,
@@ -50,10 +48,7 @@ const blogSchema = new Schema<IPost>(
             index: true,
         },
         publishedAt: { type: Date },
-        readTime: { type: String },
-        views: { type: Number, default: 0, min: 0 },
-        likes: [{ type: Schema.Types.ObjectId, ref: "User" }],
-        commentsCount: { type: Number, default: 0, min: 0 },
+        readTime: { type: String }
     },
     {
         timestamps: true,
@@ -113,14 +108,15 @@ bodyPath.discriminator(
     )
 )
 
-blogSchema.virtual("likesCount").get(function (this: IPost) {
-    return this.likes?.length ?? 0
-})
-
 
 blogSchema.pre("save", function () {
     const doc = this as unknown as IPost
     const blocks = doc.body as Array<Record<string, unknown>>
+
+    if (doc.slug === "slug") {
+        const newSlug = doc.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
+        doc.slug = `${newSlug}-${Date.now().toString()}`;
+    }
 
     if (!doc.excerpt) {
         const firstParagraph = blocks.find(
@@ -177,11 +173,78 @@ blogSchema.pre("save", function () {
     }
 })
 
+blogSchema.pre("findOneAndUpdate", function () {
+
+    const update = this.getUpdate() as unknown as IPost;
+
+    const updateData = update;
+    const blocks = updateData.body as Array<Record<string, unknown>>;
+    if (blocks && Array.isArray(blocks)) {
+        if (updateData.slug === "slug") {
+            const newSlug = updateData.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
+            updateData.slug = `${newSlug}-${Date.now().toString()}`;
+        }
+
+        if (!updateData.excerpt) {
+            const firstParagraph = blocks.find(
+                (block) =>
+                    block.type === "paragraph" &&
+                    typeof block.content === "string"
+            )
+
+            if (firstParagraph) {
+                updateData.excerpt = String(firstParagraph.content).slice(0, 200)
+            }
+        }
+
+        if (!updateData.coverImage) {
+            const firstImage = blocks.find(
+                (block) => block.type === "img" && block.src
+            )
+
+            if (firstImage) {
+                updateData.coverImage = String(firstImage.src)
+            }
+        }
+
+        if (!updateData.readTime) {
+            const wordCount = blocks.reduce((total, block) => {
+                if (block.type === "code") return total
+
+                if (block.type === "list" && Array.isArray(block.items)) {
+                    return (
+                        total +
+                        (block.items as string[])
+                            .join(" ")
+                            .split(/\s+/)
+                            .filter(Boolean).length
+                    )
+                }
+
+                if (typeof block.content === "string") {
+                    return (
+                        total +
+                        block.content.split(/\s+/).filter(Boolean).length
+                    )
+                }
+
+                return total
+            }, 0)
+
+            const minutes = Math.max(1, Math.ceil(wordCount / 200))
+            updateData.readTime = `${minutes} min read`
+        }
+
+        if (updateData.status === "published" && !updateData.publishedAt) {
+            updateData.publishedAt = new Date()
+        }
+    }
+})
+
 blogSchema.index({ status: 1, publishedAt: -1 })
 blogSchema.index({ author: 1, publishedAt: -1 })
 blogSchema.index({ title: "text", excerpt: "text" })
 
-const Blog: Model<IPost> =
-    (mongoose.models.Blog as Model<IPost>) || mongoose.model<IPost>("Blog", blogSchema)
+const Blog: Model<IPost> = (mongoose.models.Blog as Model<IPost>) || mongoose.model<IPost>("Blog", blogSchema)
 
 export default Blog

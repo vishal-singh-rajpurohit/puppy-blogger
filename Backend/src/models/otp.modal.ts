@@ -34,4 +34,6 @@ const OTPSchema = new Schema<Omit<IOTP, 'userId'> & { userId: mongoose.Types.Obj
 }, { timestamps: true });
 
 
-export const OTPs = model<Omit<IOTP, 'userId'> & { userId: mongoose.Types.ObjectId }>('OTP', OTPSchema)
+const OTPs = model<Omit<IOTP, 'userId'> & { userId: mongoose.Types.ObjectId }>('OTP', OTPSchema);
+
+export default OTPs;

@@ -1,11 +1,12 @@
 import type { Request, Response } from 'express'
-import { User, OTPs } from "../models/index.js"
+import { User, OTPs, Blog } from "../models/index.js"
 import { cookieOptions } from '../config/settings.js';
 import APIRepsonse from '../utils/ApiResponse.js';
 import { decodeAccessToken, decodeRefreshToken, genrateResetToken } from '../utils/tokens.utils.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
 import jwt, { type JwtPayload } from 'jsonwebtoken'
 import { sendOtp, sendPasswordResetSuccessEmail, sendRegistrationEmail } from '../utils/Resend.js';
+import mongoose from 'mongoose';
 
 
 function genrateOTP(): string {
@@ -373,6 +374,96 @@ const logout = asyncHandler(async (req: Request, resp: Response,) => {
  * Reset Password Controllers
  */
 
+const getMyPosts = asyncHandler(async (req: Request, resp: Response) => {
+    try {
+        if (!req.user) {
+            resp.status(401).json(new APIRepsonse(401, null, "Unautharized Access"))
+            return;
+        }
+
+        const user = await User.findById(req.user?._id);
+
+        if (!user) {
+            resp.status(404).json(new APIRepsonse(404, null, "User not found"));
+            return;
+        }
+
+        const posts = await Blog.aggregate([
+            {
+                $match: {
+                    author: new mongoose.Types.ObjectId(user._id)
+                }
+            },
+            {
+                $lookup: {
+                    from: 'comments',
+                    localField: '_id',
+                    foreignField: 'postId',
+                    as: 'comments'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'likes',
+                    localField: '_id',
+                    foreignField: 'postId',
+                    as: 'likes'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'views',
+                    localField: '_id',
+                    foreignField: 'postId',
+                    as: 'views'
+                }
+            },
+            {
+                $addFields: {
+                    commentsCount: {
+                        $size: '$comments'
+                    },
+                    likesCount: {
+                        $size: '$likes'
+                    },
+                    views: {
+                        $size: '$views'
+                    },
+                }
+            },
+            {
+                $project: {
+                    title: 1,
+                    excerpt: 1,
+                    updatedAt: 1,
+                    status: 1,
+                    commentsCount: 1,
+                    likesCount: 1,
+                    views: 1,
+                }
+            },
+        ])
+
+        if (!posts) {
+            resp.status(400).json(new APIRepsonse(404, null, "Posts not found"));
+            return;
+        }
+
+        resp.status(200).json(new APIRepsonse(200, {
+            posts: posts
+        }, "User Logged In Successfully"))
+
+    } catch (error) {
+        if (error instanceof Error) throw new Error("Error in getting All Posts: " + error.message)
+        throw new Error("Error in getting All Posts: ")
+    }
+})
+
+
+/**
+ * Reset Password Controllers
+ */
+
 const resetPasswordOTP = asyncHandler(async (req: Request, resp: Response,) => {
     try {
         const { email } = req.body;
@@ -524,6 +615,7 @@ export default {
     register,
     login,
     logout,
+    getMyPosts,
     genrateResetToken,
     resetPassword,
     resetPasswordOTP,

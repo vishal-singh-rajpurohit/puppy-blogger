@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express"
 import jwt, { type JwtPayload } from 'jsonwebtoken'
-import { User } from "../models/user.modal.js";
+import { User } from "../models/index.js";
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;

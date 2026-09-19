@@ -1,14 +1,15 @@
 import mongoose, { model, Schema, Types } from "mongoose"
-import {z} from "zod"
+import { z } from "zod"
 
 
 const LikesSchemaValidation = z.object({
-    userId: z.string().refine((val)=> Types.ObjectId.isValid(val), {
+    userId: z.string().refine((val) => Types.ObjectId.isValid(val), {
         message: "Invalid User Id"
     }),
-    postId: z.string().refine((val)=> Types.ObjectId.isValid(val), {
+    postId: z.string().refine((val) => Types.ObjectId.isValid(val), {
         message: "Invalid Post Id"
     }),
+    isLike: z.boolean(),
     createdAt: z.date(),
     updatedAt: z.date()
 });
@@ -28,8 +29,15 @@ const LikeSchema = new Schema<Omit<ILike, 'userId' | 'postId'> & {
         type: mongoose.Types.ObjectId,
         ref: 'user',
         required: true
+    },
+    isLike: {
+        type: Boolean,
+        default: true,
+        required: true
     }
-},{timestamps: true})
+}, { timestamps: true })
 
 
-export const Like = model('Like', LikeSchema)
+const Like = model('Like', LikeSchema);
+
+export default Like;

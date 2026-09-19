@@ -209,8 +209,10 @@ UserSchema.methods.createRefreshToken =
     };
 
 
-export const User =
+const User =
     model<IUser, UserModel>(
         "User",
         UserSchema
     );
+
+export default User;

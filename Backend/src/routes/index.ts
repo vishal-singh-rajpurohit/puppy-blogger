@@ -1,4 +1,4 @@
-import { authRouter } from "./auth.router.js";
-import { blogRouter } from "./blog.router.js";
+import { authRouter } from "./auth.routes.js";
+import { blogRouter } from "./blog.routes.js";
 
-export { authRouter, blogRouter }
+export default { authRouter, blogRouter }
