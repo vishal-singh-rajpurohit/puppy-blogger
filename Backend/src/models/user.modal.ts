@@ -1,13 +1,5 @@
-import {
-    Schema,
-    model,
-    type UpdateQuery
-} from "mongoose";
-
-import jwt, {
-    type SignOptions
-} from "jsonwebtoken";
-
+import { Model, Schema, model, type UpdateQuery } from "mongoose";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { z } from "zod";
 
@@ -64,13 +56,12 @@ interface IUserMethods {
 }
 
 
-/* =========================
-   Schema
-========================= */
+export type UserModel = Model<IUser, {}, IUserMethods>;
+
 
 const UserSchema = new Schema<
     IUser,
-    any,
+    UserModel,
     IUserMethods
 >(
     {
@@ -110,9 +101,6 @@ const UserSchema = new Schema<
 );
 
 
-/* =========================
-   Password Hashing
-========================= */
 
 UserSchema.pre("save", async function () {
 
@@ -147,9 +135,6 @@ UserSchema.pre(
 );
 
 
-/* =========================
-   Password Verification
-========================= */
 
 UserSchema.methods.isPasswordCorrect =
     async function (password: string) {
@@ -161,18 +146,13 @@ UserSchema.methods.isPasswordCorrect =
     };
 
 
-/* =========================
-   Access Token
-========================= */
 
 UserSchema.methods.createAccessToken =
     async function () {
 
-        const secret =
-            process.env.ACCESS_TOKEN_SECRET;
+        const secret = process.env.ACCESS_TOKEN_SECRET;
 
-        const expiration =
-            process.env.ACCESS_TOKEN_EXP;
+        const expiration = process.env.ACCESS_TOKEN_EXP;
 
         if (!secret || !expiration) {
             throw new Error(
@@ -180,10 +160,7 @@ UserSchema.methods.createAccessToken =
             );
         }
 
-        const expiresIn =
-            expiration as NonNullable<
-                SignOptions["expiresIn"]
-            >;
+        const expiresIn = expiration as NonNullable<SignOptions["expiresIn"]>;
 
         return jwt.sign(
             {
@@ -198,9 +175,6 @@ UserSchema.methods.createAccessToken =
     };
 
 
-/* =========================
-   Refresh Token
-========================= */
 
 UserSchema.methods.createRefreshToken =
     async function () {
@@ -235,12 +209,8 @@ UserSchema.methods.createRefreshToken =
     };
 
 
-/* =========================
-   Model
-========================= */
-
 export const User =
-    model<IUser, any, IUserMethods>(
+    model<IUser, UserModel>(
         "User",
         UserSchema
     );
