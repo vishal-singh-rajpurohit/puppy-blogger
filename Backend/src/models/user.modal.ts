@@ -29,8 +29,6 @@ const UserValidationSchema = z.object({
 
     refresh_token: z.string().optional(),
 
-    access_token: z.string().optional(),
-
     createdAt: z.date().optional(),
 
     updatedAt: z.date().optional()
@@ -67,12 +65,12 @@ const UserSchema = new Schema<
     {
         name: {
             type: String,
-            required: true
+            required: false
         },
 
         username: {
             type: String,
-            required: true,
+            required: false,
             unique: true
         },
 
@@ -88,10 +86,6 @@ const UserSchema = new Schema<
         },
 
         refresh_token: {
-            type: String
-        },
-
-        access_token: {
             type: String
         }
     },
@@ -165,7 +159,8 @@ UserSchema.methods.createAccessToken =
         return jwt.sign(
             {
                 _id: this._id,
-                username: this.username
+                email: this.email,
+                updatedAt: this.updatedAt
             },
             secret,
             {
@@ -199,7 +194,7 @@ UserSchema.methods.createRefreshToken =
         return jwt.sign(
             {
                 _id: this._id,
-                username: this.username
+                email: this.email
             },
             secret,
             {

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express'
 import { User, OTPs, Blog } from "../models/index.js"
-import { cookieOptions } from '../config/settings.js';
+import { ACCESS_TOKEN_COOKIE_OPTIONS, REFRESH_TOKEN_COOKIE_OPTIONS, RESET_TOKEN_COOKIE_OPTIONS } from '../config/settings.js';
 import APIRepsonse from '../utils/ApiResponse.js';
 import { decodeAccessToken, decodeRefreshToken, genrateResetToken } from '../utils/tokens.utils.js';
 import { asyncHandler } from '../utils/AsyncHandler.js';
@@ -52,9 +52,9 @@ const authCheck = asyncHandler(async (req: Request, resp: Response,) => {
         const updatedUser = await User.findByIdAndUpdate(
             user._id,
             {
-                access_token: decodedAccessToken,
                 refresh_token: decodedRefreshToken
-            }
+            },
+            { returnDocument: 'after' }
         );
 
         if (!updatedUser) {
@@ -69,11 +69,14 @@ const authCheck = asyncHandler(async (req: Request, resp: Response,) => {
             return;
         }
 
-        resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, cookieOptions)
-        resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, cookieOptions)
+        resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, ACCESS_TOKEN_COOKIE_OPTIONS)
+        resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, REFRESH_TOKEN_COOKIE_OPTIONS)
 
         resp.status(200).json(new APIRepsonse(200, {
-            user: finalUser
+            user: finalUser,
+            incomplete: Boolean(finalUser.username),
+            access_token: ACCESS_TOKEN,
+            refresh_token: REFRESH_TOKEN
         }, "User Logged In Successfully"))
 
     } catch (error) {
@@ -96,12 +99,12 @@ const checkEmail = asyncHandler(async (req: Request, resp: Response,) => {
         const isUserExists = await User.exists({ email: email.trim().toLowerCase() })
 
         if (isUserExists) {
-            resp.status(200).json(new APIRepsonse(409, { avilable: false }, "email is already taken"));
+            resp.status(200).json(new APIRepsonse(200, { avilable: false }, "email is already taken"));
             return;
         }
 
 
-        resp.status(409).json(new APIRepsonse(409, { avilable: true }, "email is avilable"));
+        resp.status(200).json(new APIRepsonse(200, { avilable: true }, "email is avilable"));
 
     } catch (error) {
         if (error instanceof Error) throw new Error("Error in Auth Cheking: " + error.message)
@@ -122,12 +125,12 @@ const checkUsername = asyncHandler(async (req: Request, resp: Response,) => {
         const isUserExists = await User.exists({ username: username.trim().toLowerCase() })
 
         if (isUserExists) {
-            resp.status(200).json(new APIRepsonse(409, { avilable: false }, "Username is already taken"));
+            resp.status(200).json(new APIRepsonse(200, { avilable: false }, "Username is already taken"));
             return;
         }
 
 
-        resp.status(409).json(new APIRepsonse(409, { avilable: true }, "Username is avilable"));
+        resp.status(200).json(new APIRepsonse(200, { avilable: true }, "Username is avilable"));
 
     } catch (error) {
         if (error instanceof Error) throw new Error("Error in Auth Cheking: " + error.message)
@@ -136,12 +139,12 @@ const checkUsername = asyncHandler(async (req: Request, resp: Response,) => {
 });
 
 
-const register = asyncHandler(async (req: Request, resp: Response,) => {
+const registerEmail = asyncHandler(async (req: Request, resp: Response,) => {
     try {
 
-        const { name, username, email, password, conform_password } = req.body;
+        const { email, password, conform_password } = req.body;
 
-        if (!name || !username || !email || !password || !conform_password) {
+        if (!email || !password || !conform_password) {
             resp.status(400).json(new APIRepsonse(400, null, "all data required"))
             return;
         }
@@ -152,10 +155,7 @@ const register = asyncHandler(async (req: Request, resp: Response,) => {
         }
 
         const isUserExists = await User.exists({
-            $or: [
-                { username: username.trim().toLowerCase() },
-                { email: email.trim().toLowerCase() }
-            ]
+            email: email.trim().toLowerCase()
         })
 
         if (isUserExists) {
@@ -166,8 +166,6 @@ const register = asyncHandler(async (req: Request, resp: Response,) => {
         }
 
         const user = new User({
-            name,
-            username,
             email,
             password_hash: password
         });
@@ -193,10 +191,10 @@ const register = asyncHandler(async (req: Request, resp: Response,) => {
             user._id,
             {
                 $set: {
-                    access_token: ACCESS_TOKEN,
                     refresh_token: REFRESH_TOKEN
                 }
-            }
+            },
+            { returnDocument: 'after' }
         );
 
         if (!updatedUser) {
@@ -204,12 +202,118 @@ const register = asyncHandler(async (req: Request, resp: Response,) => {
             return;
         }
 
-        resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, cookieOptions)
-        resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, cookieOptions)
+        resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, ACCESS_TOKEN_COOKIE_OPTIONS)
+        resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, REFRESH_TOKEN_COOKIE_OPTIONS)
 
         const finalUser = await User.findById(updatedUser._id).select(" -refresh_token -password_hash -access_token");
 
         if (!finalUser) {
+            resp.status(501).json(new APIRepsonse(501, null, "Internal Server Error"))
+            return;
+        }
+
+        await sendRegistrationEmail(finalUser.email, finalUser.username)
+
+        resp.status(200).json(new APIRepsonse(200, {
+            user: finalUser
+        }, "User Email Successfully"))
+
+    } catch (error) {
+        if (error instanceof Error) throw new Error("Error in Auth Cheking: " + error.message)
+        throw new Error("Error in Auth Cheking: ")
+    }
+});
+
+const registerDetails = asyncHandler(async (req: Request, resp: Response,) => {
+    try {
+        if (!req.user) {
+            console.log("Error here")
+            resp.status(401).json(new APIRepsonse(401, null, "Unautharized Access"))
+            return;
+        }
+
+        const authUser = await User.findById(req.user?._id);
+
+        if (!authUser) {
+            console.log("Error here")
+            resp.status(404).json(new APIRepsonse(404, null, "User not found"));
+            return;
+        }
+
+        const { name, username } = req.body;
+
+        if (!name || !username) {
+            console.log("Error here")
+            resp.status(400).json(new APIRepsonse(400, null, "all data required"))
+            return;
+        }
+
+        const isUserExists = await User.exists({
+            username: username.trim().toLowerCase()
+        })
+
+        if (isUserExists) {
+            console.log("Error here")
+            resp.status(409).json(
+                new APIRepsonse(409, null, "Username or email already exists")
+            );
+            return;
+        }
+
+        const user = await User.findByIdAndUpdate(req.user._id, {
+            $set: {
+                name: name,
+                username: username
+            }
+        }, { returnDocument: 'after' });
+
+        if (!user) {
+            console.log("Error here")
+            resp.status(501).json(new APIRepsonse(501, null, "Cannot update user"))
+            return;
+        }
+
+        // const ACCESS_TOKEN = await user.createAccessToken()
+        // const REFRESH_TOKEN = await user.createRefreshToken()
+
+        // if (!ACCESS_TOKEN || !REFRESH_TOKEN) {
+        //     console.log("Error here")
+        //     resp.status(501).json(new APIRepsonse(501, null, "Cannot Generate ACCESS_TOKEN or REFRESH_TOKEN"));
+        //     return;
+        // }
+
+        // const decodedAccessToken = await decodeAccessToken(ACCESS_TOKEN);
+        // const decodedRefreshToken = await decodeRefreshToken(REFRESH_TOKEN);
+
+        // if (!decodedAccessToken || !decodedRefreshToken) {
+        //     console.log("Error here")
+        //     resp.status(501).json(new APIRepsonse(501, null, "INTERNAL SERVER ERROR"));
+        //     return;
+        // }
+
+        // const updatedUser = await User.findByIdAndUpdate(
+        //     user._id,
+        //     {
+        //         $set: {
+        //             refresh_token: REFRESH_TOKEN
+        //         }
+        //     },
+        //     { returnDocument: 'after' }
+        // );
+
+        // if (!updatedUser) {
+        //     console.log("Error here")
+        //     resp.status(501).json(new APIRepsonse(501, null, "Error updating User"))
+        //     return;
+        // }
+
+        // resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, ACCESS_TOKEN_COOKIE_OPTIONS)
+        // resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, REFRESH_TOKEN_COOKIE_OPTIONS)
+
+        const finalUser = await User.findById(user._id).select(" -refresh_token -password_hash -access_token");
+
+        if (!finalUser) {
+            console.log("Error here")
             resp.status(501).json(new APIRepsonse(501, null, "Internal Server Error"))
             return;
         }
@@ -294,10 +398,10 @@ const login = asyncHandler(async (req: Request, resp: Response,) => {
             user._id,
             {
                 $set: {
-                    access_token: ACCESS_TOKEN,
                     refresh_token: REFRESH_TOKEN
                 }
-            }
+            },
+            { returnDocument: 'after' }
         );
 
         if (!updatedUser) {
@@ -305,8 +409,8 @@ const login = asyncHandler(async (req: Request, resp: Response,) => {
             return;
         }
 
-        resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, cookieOptions)
-        resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, cookieOptions)
+        resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, ACCESS_TOKEN_COOKIE_OPTIONS)
+        resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, REFRESH_TOKEN_COOKIE_OPTIONS)
 
         const finalUser = await User.findById(updatedUser._id).select(" -refresh_token -password_hash -access_token");
 
@@ -319,6 +423,151 @@ const login = asyncHandler(async (req: Request, resp: Response,) => {
             user: finalUser
         }, "User Logged-In Successfully"))
 
+    } catch (error) {
+        if (error instanceof Error) throw new Error("Error in Auth Cheking: " + error.message)
+        throw new Error("Error in Auth Cheking: ")
+    }
+});
+
+const oauthLogin = asyncHandler(async (req: Request, resp: Response,) => {
+    try {
+        const { username, email, password } = req.body;
+
+        if (!(username || email)) {
+            resp.status(400).json(new APIRepsonse(400, null, "all data required"))
+            return;
+        }
+
+        const isUserExists = await User.exists({
+            $or: [
+                { username: username },
+                { email: email }
+            ]
+        })
+
+        if (!isUserExists) {
+            // Register
+
+            const { conform_password } = req.body;
+
+            if (password.trim() !== conform_password.trim()) {
+                throw new Error("Passwords are not matching: ", { cause: "Comform password not matching" });
+            }
+
+            const user = new User({
+                email,
+                password_hash: password
+            });
+            await user.save();
+
+            const ACCESS_TOKEN = await user.createAccessToken()
+            const REFRESH_TOKEN = await user.createRefreshToken()
+
+            if (!ACCESS_TOKEN || !REFRESH_TOKEN) {
+                throw new Error("Internal Server Error ", { cause: "Cannot genrate Tokens" })
+            }
+
+            const decodedAccessToken = await decodeAccessToken(ACCESS_TOKEN);
+            const decodedRefreshToken = await decodeRefreshToken(REFRESH_TOKEN);
+
+            if (!decodedAccessToken || !decodedRefreshToken) {
+                throw new Error("Internal Server Error ", { cause: "Could not decode Tokens" });
+            }
+
+            const updatedUser = await User.findByIdAndUpdate(
+                user._id,
+                {
+                    $set: {
+                        refresh_token: REFRESH_TOKEN
+                    }
+                },
+                { returnDocument: 'after' }
+            );
+
+            if (!updatedUser) {
+                throw new Error("Internal Server Error ", { cause: "Cannot Update User" });
+            }
+
+            const finalUser = await User.findById(updatedUser._id).select(" -refresh_token -password_hash -access_token");
+
+            if (!finalUser) {
+                throw new Error("Internal Server Error ", { cause: "Final User Error" });
+            }
+
+            await sendRegistrationEmail(finalUser.email, finalUser.username)
+
+
+
+            resp.status(200).json(new APIRepsonse(200, {
+                user: finalUser,
+                incomplete: true,
+                access_token: ACCESS_TOKEN,
+                refresh_token: REFRESH_TOKEN
+            }, "User Email Successfully"))
+
+
+            return;
+        } else {
+            // Login
+            const user = await User.findOne({
+                $or: [
+                    { username: username },
+                    { email: email }
+                ]
+            });
+
+            if (!user) {
+                throw new Error("Internal Server Error: ", { cause: "User not found in DB" })
+            }
+
+            const isPasswordCorrect = await user.isPasswordCorrect(password);
+
+            if (!isPasswordCorrect) {
+                throw new Error("Incorrect Password: ", { cause: "Incorrect Password" })
+            }
+
+            const ACCESS_TOKEN = await user.createAccessToken()
+            const REFRESH_TOKEN = await user.createRefreshToken()
+
+            if (!ACCESS_TOKEN || !REFRESH_TOKEN) {
+                throw new Error("Internal Server Error ", { cause: "Cannot genrate Tokens" })
+            }
+
+            const decodedAccessToken = await decodeAccessToken(ACCESS_TOKEN);
+            const decodedRefreshToken = await decodeRefreshToken(REFRESH_TOKEN);
+
+            if (!decodedAccessToken || !decodedRefreshToken) {
+                throw new Error("Internal Server Error ", { cause: "Could not decode Tokens" });
+            }
+
+            const updatedUser = await User.findByIdAndUpdate(
+                user._id,
+                {
+                    $set: {
+                        refresh_token: REFRESH_TOKEN
+                    }
+                },
+                { returnDocument: 'after' }
+            );
+
+            if (!updatedUser) {
+                throw new Error("Internal Server Error ", { cause: "Cannot Update User" });
+            }
+
+            const finalUser = await User.findById(updatedUser._id).select(" -refresh_token -password_hash -access_token");
+
+            if (!finalUser) {
+                throw new Error("Internal Server Error ", { cause: "Final User Error" });
+            }
+
+            resp.status(200).json(new APIRepsonse(200, {
+                user: finalUser,
+                incomplete: !finalUser.username,
+                access_token: ACCESS_TOKEN,
+                refresh_token: REFRESH_TOKEN
+            }, "User Logged-In Successfully"));
+            return;
+        }
     } catch (error) {
         if (error instanceof Error) throw new Error("Error in Auth Cheking: " + error.message)
         throw new Error("Error in Auth Cheking: ")
@@ -348,9 +597,7 @@ const logout = asyncHandler(async (req: Request, resp: Response,) => {
                     refresh_token: ""
                 }
             },
-            {
-                new: true
-            }
+            { returnDocument: 'after' }
         );
 
         if (!updatedUser) {
@@ -358,8 +605,8 @@ const logout = asyncHandler(async (req: Request, resp: Response,) => {
             return;
         }
 
-        resp.clearCookie("ACCESS_TOKEN", cookieOptions)
-        resp.clearCookie("REFRESH_TOKEN", cookieOptions)
+        resp.clearCookie("ACCESS_TOKEN", ACCESS_TOKEN_COOKIE_OPTIONS)
+        resp.clearCookie("REFRESH_TOKEN", REFRESH_TOKEN_COOKIE_OPTIONS)
 
         resp.status(200).json(new APIRepsonse(200, null, "Logged out successfully"))
 
@@ -536,7 +783,7 @@ const resetPasswordOTPVerify = asyncHandler(async (req: Request, resp: Response,
             return;
         }
 
-        resp.cookie('RESET_TOKEN', RESET_TOKEN, cookieOptions)
+        resp.cookie('RESET_TOKEN', RESET_TOKEN, RESET_TOKEN_COOKIE_OPTIONS)
         resp.status(200).json(new APIRepsonse(200, { success: true }, "OTP Session initiated"))
     } catch (error) {
         if (error instanceof Error) throw new Error("Error in Verifying OTP: " + error.message)
@@ -588,7 +835,7 @@ const resetPassword = asyncHandler(async (req: Request, resp: Response) => {
 
         const updatedUser = await User.findByIdAndUpdate(user._id, {
             password_hash: password
-        })
+        }, { returnDocument: 'after' })
 
         if (!updatedUser) {
             resp.status(401).json(new APIRepsonse(401, { success: false }, "Passwords updated successfully"));
@@ -612,8 +859,10 @@ export default {
     authCheck,
     checkEmail,
     checkUsername,
-    register,
+    registerEmail,
+    registerDetails,
     login,
+    oauthLogin,
     logout,
     getMyPosts,
     genrateResetToken,

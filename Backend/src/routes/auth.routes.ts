@@ -7,13 +7,17 @@ const authRouter = Router();
 
 authRouter.route('/').get(auth, authController.authCheck);
 
-authRouter.route('/check/username').get(authController.checkUsername);
-authRouter.route('/check/email').get(authController.checkEmail);
+authRouter.route('/check/username').post(authController.checkUsername);
+authRouter.route('/check/email').post(authController.checkEmail);
 
-authRouter.route('/register').post(authController.register);
+authRouter.route('/register').post(authController.registerEmail);
+authRouter.route('/register/detail').put(auth, authController.registerDetails);
+
 authRouter.route('/login').post(authController.login);
 authRouter.route('/logout').get(auth, authController.logout);
 authRouter.route('/posts/get-my-posts').get(auth, authController.getMyPosts);
+
+authRouter.route('/oauth').post(authController.oauthLogin);
 
 authRouter.route('/reset/password/otp').post(authController.resetPasswordOTP);
 authRouter.route('/reset/password/otp/verify').post(authController.resetPasswordOTPVerify);
