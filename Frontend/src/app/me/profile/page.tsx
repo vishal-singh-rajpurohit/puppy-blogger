@@ -4,6 +4,7 @@ import { Mail, Globe, PenLine, Eye, Heart, type LucideIcon } from "lucide-react"
 
 import { FaGithub, FaTwitter } from "react-icons/fa"
 import { IconType } from "react-icons/lib"
+import { signOut } from "next-auth/react"
 
 
 type ProfileUser = {
@@ -167,6 +168,10 @@ export default function ProfilePage() {
   const totalViews = blogs.reduce((sum, blog) => sum + blog.views, 0)
   const totalLikes = blogs.reduce((sum, blog) => sum + blog.likes, 0)
 
+  const logout = async () => {
+    await signOut()
+  }
+
   return (
     <main className="min-h-screen bg-ui-bg-primary">
       <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
@@ -195,6 +200,7 @@ export default function ProfilePage() {
                 >
                   Edit profile
                 </Link>
+                {/* <button className="" onClick={logout}>Logout</button> */}
               </div>
 
               <p className="mt-3 max-w-md text-sm leading-relaxed text-ui-text-secondary">

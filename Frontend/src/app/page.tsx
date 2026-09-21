@@ -237,7 +237,7 @@ function SiteFooter() {
   );
 }
 
-export default function Home() {
+export default async function Home() {
   return (
     <div
       className={`${display.variable} ${body.variable} flex min-h-screen flex-col items-center`}

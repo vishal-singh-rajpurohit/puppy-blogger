@@ -3,6 +3,9 @@ import { useState, type FormEvent } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
+import { signIn } from "next-auth/react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 type Mode = "login" | "register"
 
@@ -106,6 +109,8 @@ function PasswordField({
 }
 
 export default function AuthPage() {
+    const { data: session } = useSession()
+    const roter = useRouter()
     const [mode, setMode] = useState<Mode>("login")
     const [form, setForm] = useState<FormState>(initialForm)
     const [error, setError] = useState<string | null>(null)
@@ -132,14 +137,33 @@ export default function AuthPage() {
 
         setIsSubmitting(true)
         try {
-            // Replace with a real API call, e.g.:
-            // await fetch(mode === "login" ? "/api/auth/login" : "/api/auth/register", {
-            //   method: "POST",
-            //   headers: { "Content-Type": "application/json" },
-            //   body: JSON.stringify(form),
-            // })
-            await new Promise((resolve) => setTimeout(resolve, 600))
-        } catch {
+            const result = await signIn("credentials", {
+                mode,
+                email: form.email,
+                password: form.password,
+                conform_password: form.newPassword,
+                redirect: false,
+            });
+
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            if (session && session.user) {
+                const authSession = session as typeof session & {
+                    accessToken?: string;
+                    refreshToken?: string;
+                    incomplete?: boolean;
+                };
+
+                if (authSession.incomplete) { roter.push('/auth/me') }
+                if (!authSession.incomplete) { roter.push('/') }
+            }
+
+
+        } catch (error) {
+            console.log(error)
             setError("Something went wrong. Try again.")
         } finally {
             setIsSubmitting(false)
@@ -189,24 +213,6 @@ export default function AuthPage() {
                     </p>
 
                     <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-                        {mode === "register" && (
-                            <TextField
-                                id="fullname"
-                                label="Full Name"
-                                value={form.username}
-                                onChange={(value) => updateField("fullname", value)}
-                                autoComplete="fullname"
-                            />
-                        )}
-                        {mode === "register" && (
-                            <TextField
-                                id="username"
-                                label="Username"
-                                value={form.username}
-                                onChange={(value) => updateField("username", value)}
-                                autoComplete="username"
-                            />
-                        )}
 
                         <TextField
                             id="email"

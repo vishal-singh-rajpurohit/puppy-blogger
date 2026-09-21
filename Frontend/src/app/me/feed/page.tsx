@@ -2,6 +2,12 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Eye, Heart, MessageCircle } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { getAPICall } from "@/lib/api"
+import { feedLimit } from "@/config"
+import { useSession } from "next-auth/react"
+import { AuthSessionUnion } from "@/types/authSession.types"
+import { ApiResp, BlogFeedOverview, BlogsFeed } from "@/types/api.types"
 
 type Author = {
     name: string
@@ -159,16 +165,16 @@ function formatCount(value: number): string {
     return `${millions % 1 === 0 ? millions.toFixed(0) : millions.toFixed(1)}m`
 }
 
-function FeedItem({ blog }: { blog: Blog }) {
+function FeedItem({ blog }: { blog: BlogFeedOverview }) {
     return (
         <Link
-            href={`/blog/${blog.slug}`}
+            href={`/me/feed/${blog.slug}`}
             className="block rounded-sm bg-ui-card-secondary p-5 transition hover:bg-ui-card-tirtury"
         >
             <div className="flex items-center gap-2.5">
                 <img
-                    src={blog.author.avatarUrl}
-                    alt={`${blog.author.name}'s profile picture`}
+                    src={blog.author?.avatarUrl || "https://images.unsplash.com/photo-1779896412192-cca060dfafde?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDF8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"}
+                    alt={`${blog.author.username}'s profile picture`}
                     className="size-8 shrink-0 rounded-full object-cover"
                 />
                 <div className="min-w-0">
@@ -176,7 +182,7 @@ function FeedItem({ blog }: { blog: Blog }) {
                         {blog.author.name}
                     </p>
                     <p className="text-xs text-ui-text-secondary">
-                        {blog.publishedAt} · {blog.readTime}
+                        {blog.updatedAt} · {blog.readTime}
                     </p>
                 </div>
             </div>
@@ -191,17 +197,17 @@ function FeedItem({ blog }: { blog: Blog }) {
             <div className="mt-4 flex items-center gap-4 text-xs text-ui-text-secondary">
                 <span className="flex items-center gap-1">
                     <Eye size={13} aria-hidden="true" />
-                    {formatCount(blog.views)}
+                    {formatCount(blog.viewsCount)}
                     <span className="sr-only"> views</span>
                 </span>
                 <span className="flex items-center gap-1">
                     <Heart size={13} aria-hidden="true" />
-                    {formatCount(blog.likes)}
+                    {formatCount(blog.likesCount)}
                     <span className="sr-only"> likes</span>
                 </span>
                 <span className="flex items-center gap-1">
                     <MessageCircle size={13} aria-hidden="true" />
-                    {formatCount(blog.comments)}
+                    {formatCount(blog.commentsCount)}
                     <span className="sr-only"> comments</span>
                 </span>
             </div>
@@ -209,30 +215,61 @@ function FeedItem({ blog }: { blog: Blog }) {
     )
 }
 
-export default function FeedPage() {
-    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+function FeedItemLoading() {
+    return (
+        <section className="mt-8 flex flex-col gap-4">
+            <div className="block rounded-sm bg-ui-card-secondary p-5 transition hover:bg-ui-card-tirtury h-50">
+            </div>
+            <div className="block rounded-sm bg-ui-card-secondary p-5 transition hover:bg-ui-card-tirtury h-50">
+            </div>
+        </section>
 
-    const visibleBlogs = mockBlogs.slice(0, visibleCount)
-    const hasMore = visibleCount < mockBlogs.length
+    )
+}
+
+export default function FeedPage() {
+    const { data: session } = useSession()
+
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const visibleBlogs = mockBlogs.slice(0, visibleCount);
+    const hasMore = visibleCount < mockBlogs.length;
+
+    const [page, setPage] = useState<Number>(0);
+
+    const { data, isPending } = useQuery<ApiResp<BlogsFeed>>({
+        queryKey: ['blogs', page],
+        queryFn: async () => {
+            const res = await getAPICall<ApiResp<BlogsFeed>>(`/blog/feed/${page}/${feedLimit}`, session as typeof session & AuthSessionUnion)
+
+            if (Array.isArray(res)) {
+                return { body: {} as BlogsFeed /* or your default fallback structure */ } as ApiResp<BlogsFeed>;
+            }
+
+            return res;
+        },
+        enabled: !!session
+    });
 
     return (
         <main className="min-h-screen bg-ui-bg-primary">
             <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
                 <h1 className="text-2xl font-semibold text-ui-text-primary">Feed</h1>
 
-                {visibleBlogs.length > 0 ? (
+                {
+                    isPending && <FeedItemLoading />
+                }
+
+
+                {(data && data.body) && (
                     <div className="mt-8 flex flex-col gap-4">
-                        {visibleBlogs.map((blog) => (
-                            <FeedItem key={blog.id} blog={blog} />
+                        {data.body.blog.map((blog, idx) => (
+                            <FeedItem key={blog._id} blog={blog} />
+                            // <h1 key={idx} className="">{blog.author.username}</h1>
                         ))}
                     </div>
-                ) : (
-                    <p className="mt-8 text-sm text-ui-text-secondary">
-                        Nothing in the feed yet.
-                    </p>
                 )}
 
-                {hasMore && (
+                {hasMore && data && data.body && (
                     <div className="mt-8 flex justify-center">
                         <button
                             type="button"

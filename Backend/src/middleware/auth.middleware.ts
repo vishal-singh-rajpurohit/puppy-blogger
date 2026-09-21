@@ -13,7 +13,7 @@ if (!ACCESS_TOKEN_SECRET || !REFRESH_TOKEN_SECRET || !ACCESS_TOKEN_EXP || !REFRE
 
 export async function auth(req: Request, resp: Response, next: NextFunction) {
     try {
-        let ACCESS_TOKEN = req.headers.authorization;
+        let ACCESS_TOKEN = req.cookies.ACCESS_TOKEN || req.headers.authorization;
 
         if (!ACCESS_TOKEN) {
             resp.status(401).json({ message: "Unauthorized Access: Token Not Found" });
@@ -21,18 +21,22 @@ export async function auth(req: Request, resp: Response, next: NextFunction) {
         }
 
         if (!ACCESS_TOKEN_SECRET) {
-            console.log("Error here")
             resp.status(500).json({ message: "Internal Server Error: Secrets Not Found" });
             return;
         }
+
         if (ACCESS_TOKEN.startsWith("Bearer ")) {
             ACCESS_TOKEN = ACCESS_TOKEN.substring(7);
         }
 
+        let payload: string | JwtPayload;
 
-        console.log("ACCESS_TOKEN: ", ACCESS_TOKEN)
-        const payload: string | JwtPayload = jwt.verify(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-        console.log("ACCESS_TOKEN: ", ACCESS_TOKEN)
+        try {
+            payload = jwt.verify(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
+        } catch (error) {
+            console.log('error in decoding paylod: ', error)
+            throw new Error('error in decoding paylod: ')
+        }
 
         if (!payload || typeof payload === 'string' || !payload._id) {
             resp.status(401).json({ message: "Error in decoding token" });

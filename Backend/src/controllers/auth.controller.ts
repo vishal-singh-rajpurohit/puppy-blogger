@@ -318,7 +318,7 @@ const registerDetails = asyncHandler(async (req: Request, resp: Response,) => {
             return;
         }
 
-        await sendRegistrationEmail(finalUser.email, finalUser.username)
+        // await sendRegistrationEmail(finalUser.email, finalUser.username)
 
         resp.status(200).json(new APIRepsonse(200, {
             user: finalUser
@@ -332,7 +332,6 @@ const registerDetails = asyncHandler(async (req: Request, resp: Response,) => {
 
 const login = asyncHandler(async (req: Request, resp: Response,) => {
     try {
-
         const { username, email, password } = req.body;
 
         if (!(username || email) || !password) {
@@ -574,6 +573,45 @@ const oauthLogin = asyncHandler(async (req: Request, resp: Response,) => {
     }
 });
 
+const oauthLogout = asyncHandler(async (req: Request, resp: Response,) => {
+    try {
+        if (!req.user) {
+            resp.status(401).json(new APIRepsonse(401, null, "Unautharized Access"))
+            return;
+        }
+
+        const user = await User.findById(req.user?._id);
+
+        if (!user) {
+            resp.status(404).json(new APIRepsonse(404, null, "User not found"));
+            return;
+        }
+
+
+        const updatedUser = await User.findByIdAndUpdate(
+            user._id,
+            {
+                $set: {
+                    refresh_token: ""
+                }
+            },
+            { returnDocument: 'after' }
+        );
+
+        if (!updatedUser) {
+            resp.status(501).json(new APIRepsonse(501, null, "Error updating User"))
+            return;
+        }
+
+        resp.status(200).json(new APIRepsonse(200, null, "Logged out successfully"))
+
+    } catch (error) {
+        if (error instanceof Error) throw new Error("Error in Auth Cheking: " + error.message)
+        throw new Error("Error in Auth Cheking: ")
+    }
+
+});
+
 const logout = asyncHandler(async (req: Request, resp: Response,) => {
     try {
         if (!req.user) {
@@ -729,6 +767,8 @@ const resetPasswordOTP = asyncHandler(async (req: Request, resp: Response,) => {
 
         const OTP = genrateOTP();
 
+        console.log(OTP)
+
         if (!OTP) {
             resp.status(501).json(new APIRepsonse(501, { success: false }, "Cannot Generate OTP"));
             return;
@@ -863,6 +903,7 @@ export default {
     registerDetails,
     login,
     oauthLogin,
+    oauthLogout,
     logout,
     getMyPosts,
     genrateResetToken,

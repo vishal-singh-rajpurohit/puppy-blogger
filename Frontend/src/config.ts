@@ -1,0 +1,1 @@
+export const feedLimit: number = 5;

@@ -18,6 +18,7 @@ authRouter.route('/logout').get(auth, authController.logout);
 authRouter.route('/posts/get-my-posts').get(auth, authController.getMyPosts);
 
 authRouter.route('/oauth').post(authController.oauthLogin);
+authRouter.route('/oauth/logout').get(auth, authController.oauthLogout);
 
 authRouter.route('/reset/password/otp').post(authController.resetPasswordOTP);
 authRouter.route('/reset/password/otp/verify').post(authController.resetPasswordOTPVerify);

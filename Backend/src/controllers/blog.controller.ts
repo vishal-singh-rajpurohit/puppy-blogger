@@ -140,13 +140,131 @@ const changePostStatus = asyncHandler(async (req: Request, resp: Response) => {
  * Like, Comment
  */
 
+const getFeed = asyncHandler(async (req: Request, resp: Response) => {
+    try {
+        // const user = req.user;
+
+        const page = req.params.page;
+        const limit = req.params.limit;
+
+        if (!page || !limit) {
+            resp.status(400).json(new APIRepsonse(400, { success: false }, "Slug Required"))
+            return
+        }
+
+        const blogs = await Blog.aggregate([
+            {
+                $match: {
+                    status: "published"
+                }
+            },
+            {
+                $skip: Number(page) * (Number(limit) + 1)
+            },
+            {
+                $limit: Number(limit) + 1
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "author",
+                    foreignField: "_id",
+                    as: "author"
+                }
+            },
+            {
+                $lookup: {
+                    from: "comments",
+                    localField: "_id",
+                    foreignField: "postId",
+                    as: "comments"
+                }
+            },
+            {
+                $lookup: {
+                    from: "likes",
+                    localField: "_id",
+                    foreignField: "postId",
+                    as: "likes"
+                }
+            },
+            {
+                $lookup: {
+                    from: "views",
+                    localField: "_id",
+                    foreignField: "postId",
+                    as: "views"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$author"
+                }
+            },
+            {
+                $project: {
+                    status: 0,
+                    createdAt: 0,
+                    blog: 0
+                }
+            },
+            {
+                $addFields: {
+                    commentsCount: {
+                        $size: "$comments"
+                    },
+                    likesCount: {
+                        $size: "$likes"
+                    },
+                    viewsCount: {
+                        $size: "$views"
+                    }
+                }
+            },
+            {
+                $project: {
+                    comments: 0,
+                    views: 0,
+                    likes: 0,
+                    body: 0
+                }
+            },
+            {
+                $project: {
+                    'author.email': 0,
+                    'author.password_hash': 0,
+                    'author.createdAt': 0,
+                    'author.updatedAt': 0,
+                    'author.refresh_token': 0,
+                    'author.__v': 0,
+                }
+            },
+        ]);
+
+        console.log(blogs)
+
+        if (!blogs[0]) {
+            resp.status(404).json(new APIRepsonse(404, { success: false }, "Blog not found"))
+            return
+        }
+
+        resp.status(200).json(new APIRepsonse(200, {
+            success: true,
+            blog: blogs
+        }, "Blogs Found"))
+    } catch (error) {
+        console.log(error);
+        throw new Error("Error in Publishing Blog")
+    }
+});
+
 const getBlog = asyncHandler(async (req: Request, resp: Response) => {
     try {
         const user = req.user;
 
-        const id = req.params.id as string;
+        const slug = req.params.slug as string;
 
-        if (!id) {
+        if (!slug) {
             resp.status(400).json(new APIRepsonse(400, { success: false }, "Slug Required"))
             return
         }
@@ -154,7 +272,7 @@ const getBlog = asyncHandler(async (req: Request, resp: Response) => {
         const blogData = await Blog.aggregate([
             {
                 $match: {
-                    _id: new mongoose.Types.ObjectId(id)
+                    slug: slug.trim()
                 }
             },
             {
@@ -223,7 +341,16 @@ const getBlog = asyncHandler(async (req: Request, resp: Response) => {
                     excerpt: 0,
                 }
             },
-
+            {
+                $project: {
+                    'author.email': 0,
+                    'author.password_hash': 0,
+                    'author.createdAt': 0,
+                    'author.updatedAt': 0,
+                    'author.refresh_token': 0,
+                    'author.__v': 0,
+                }
+            }
         ]);
 
         const blog = blogData[0];
@@ -530,6 +657,7 @@ export default {
     createNewBlog,
     updatePost,
     changePostStatus,
+    getFeed,
     getBlog,
     likeBlog,
     dislikeBlog,

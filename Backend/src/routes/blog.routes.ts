@@ -9,8 +9,10 @@ blogRouter.route('/update').put(auth, blogController.updatePost)
 blogRouter.route('/publish').put(auth, blogController.changePostStatus)
 
 
-blogRouter.route('/get/:id').get(blogController.getBlog)
-blogRouter.route('/like/:id').get(auth, blogController.likeBlog)
+blogRouter.route('/feed/:page/:limit').get(auth, blogController.getFeed)
+
+blogRouter.route('/get/:slug').get(auth, blogController.getBlog)
+blogRouter.route('/like/:id').put(auth, blogController.likeBlog)
 blogRouter.route('/dislike/:id').get(auth, blogController.dislikeBlog)
 blogRouter.route('/comment/:id').post(auth, blogController.commentBlog)
 
