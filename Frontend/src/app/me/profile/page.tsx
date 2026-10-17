@@ -1,74 +1,38 @@
 'use client'
-import Link from "next/link"
-import { Mail, Globe, PenLine, Eye, Heart, type LucideIcon } from "lucide-react"
 
+import { useState } from "react"
+import Link from "next/link"
+import { Mail, Globe, PenLine, Eye, Heart, MessageCircle, LogOut, Settings, type LucideIcon } from "lucide-react"
 import { FaGithub, FaTwitter } from "react-icons/fa"
 import { IconType } from "react-icons/lib"
-import { signOut } from "next-auth/react"
-
+import { signOut, useSession } from "next-auth/react"
+import { getAPICall } from "@/lib/api"
+import { useQuery } from "@tanstack/react-query"
+import { AuthSessionUnion } from "@/types/authSession.types"
 
 type ProfileUser = {
-  name: string
-  username: string
-  avatarUrl: string
-  bio: string
-  email?: string
+  name?: string
+  username?: string
+  bio?: string
+  email: string
+  avatarUrl?: string
   website?: string
   github?: string
   twitter?: string
 }
 
-type Blog = {
-  id: string
+type UserPost = {
+  _id: string
   title: string
-  excerpt: string
-  slug: string
-  publishedAt: string
-  readTime: string
+  excerpt?: string
+  slug?: string
+  status: "draft" | "published"
+  updatedAt: string
   views: number
-  likes: number
+  likesCount: number
+  commentsCount: number
 }
 
-// Replace with real data from your DB/API once wired up.
-const mockUser: ProfileUser = {
-  name: "Vishal Singh",
-  username: "vishalsingh",
-  avatarUrl:
-    "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=400",
-  bio: "Writing about code, coffee, and whatever else is on my mind this week.",
-  email: "hello@vishalsingh.me",
-  website: "https://vishalsingh.me",
-  github: "https://github.com/vishalsingh",
-  twitter: "https://twitter.com/vishalsingh",
-}
-
-// Swap to an empty array to see the "start writing" state.
-const mockBlogs: Blog[] = [
-  {
-    id: "1",
-    title: "What I learned rebuilding my blog with Next.js",
-    excerpt:
-      "Notes on App Router, theming with CSS variables, and the small decisions that took longer than expected.",
-    slug: "rebuilding-my-blog-with-nextjs",
-    publishedAt: "Sep 12, 2026",
-    readTime: "4 min read",
-    views: 1840,
-    likes: 96,
-  },
-  {
-    id: "2",
-    title: "A simple theme system with Tailwind and data-attributes",
-    excerpt:
-      "How a single data-theme attribute and a handful of CSS variables replace a theme library.",
-    slug: "simple-theme-system-tailwind",
-    publishedAt: "Aug 28, 2026",
-    readTime: "6 min read",
-    views: 623,
-    likes: 41,
-  },
-]
-
-// Compact number formatting: 1840 -> "1.8k"
 function formatCount(value: number): string {
   if (value < 1000) return String(value)
   if (value < 1_000_000) {
@@ -92,6 +56,7 @@ function ContactLink({
     <Link
       href={href}
       target={href.startsWith("http") ? "_blank" : undefined}
+      rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
       className="flex items-center gap-1.5 text-sm text-ui-text-secondary transition hover:text-ui-text-secondary-hover"
     >
       <Icon size={16} />
@@ -108,35 +73,6 @@ function ProfileStat({ label, value }: { label: string; value: number }) {
       </span>
       <span className="block text-xs text-ui-text-secondary">{label}</span>
     </div>
-  )
-}
-
-function BlogCard({ blog }: { blog: Blog }) {
-  return (
-    <Link
-      href={`/blog/${blog.slug}`}
-      className="block rounded-sm bg-ui-card-secondary p-5 transition hover:bg-ui-card-tirtury"
-    >
-      <h3 className="text-base font-medium text-ui-text-primary">
-        {blog.title}
-      </h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-ui-text-secondary">
-        {blog.excerpt}
-      </p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ui-text-secondary">
-        <span>{blog.publishedAt} · {blog.readTime}</span>
-        <span className="flex items-center gap-1">
-          <Eye size={13} aria-hidden="true" />
-          {formatCount(blog.views)}
-          <span className="sr-only"> views</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <Heart size={13} aria-hidden="true" />
-          {formatCount(blog.likes)}
-          <span className="sr-only"> likes</span>
-        </span>
-      </div>
-    </Link>
   )
 }
 
@@ -162,58 +98,122 @@ function StartWritingCard() {
 }
 
 export default function ProfilePage() {
-  const user = mockUser
-  const blogs = mockBlogs
+  const { data: session } = useSession()
+  const [activeTab, setActiveTab] = useState<"all" | "published" | "draft">("all")
 
-  const totalViews = blogs.reduce((sum, blog) => sum + blog.views, 0)
-  const totalLikes = blogs.reduce((sum, blog) => sum + blog.likes, 0)
+  // Fetch profile details
+  const { data: profileResp, isLoading: isProfileLoading } = useQuery<{ body?: { user: ProfileUser } }>({
+    queryKey: ['profile'],
+    queryFn: async () => {
+      const res = await getAPICall<{ body?: { user: ProfileUser } }>('/auth/profile', session as typeof session & AuthSessionUnion)
+      if (Array.isArray(res)) return { body: undefined }
+      return res
+    },
+    enabled: !!session,
+  })
 
-  const logout = async () => {
-    await signOut()
+  // Fetch user's own posts
+  const { data: postsResp, isLoading: isPostsLoading } = useQuery<{ body?: { posts: UserPost[] } }>({
+    queryKey: ['my-posts'],
+    queryFn: async () => {
+      const res = await getAPICall<{ body?: { posts: UserPost[] } }>('/auth/posts/get-my-posts', session as typeof session & AuthSessionUnion)
+      if (Array.isArray(res)) return { body: { posts: [] } }
+      return res
+    },
+    enabled: !!session,
+  })
+
+  const user: ProfileUser = profileResp?.body?.user || {
+    name: session?.user?.name || "Blogger",
+    username: (session?.user as any)?.username || "user",
+    email: session?.user?.email || "",
+  }
+
+  const posts: UserPost[] = postsResp?.body?.posts || []
+
+  const filteredPosts = posts.filter((post) => {
+    if (activeTab === "published") return post.status === "published"
+    if (activeTab === "draft") return post.status === "draft"
+    return true
+  })
+
+  const totalViews = posts.reduce((sum, p) => sum + (p.views || 0), 0)
+  const totalLikes = posts.reduce((sum, p) => sum + (p.likesCount || 0), 0)
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/auth" })
+  }
+
+  if (isProfileLoading && !profileResp) {
+    return (
+      <main className="min-h-screen bg-ui-bg-primary flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-ui-btn-bg-primary border-t-transparent rounded-full animate-spin" />
+      </main>
+    )
   }
 
   return (
     <main className="min-h-screen bg-ui-bg-primary">
       <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-        <section className="rounded-sm bg-ui-card-primary p-8">
+        {/* User Card */}
+        <section className="rounded-sm bg-ui-card-primary p-8 shadow-sm">
           <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:items-start sm:text-left">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={user.avatarUrl}
-              alt={`${user.name}'s profile picture`}
+              src={user.avatarUrl || '/icons/profile.png'}
+              alt={`${user.name || 'User'}'s profile picture`}
               className="size-24 shrink-0 rounded-full border border-gray-300 object-cover shadow-inner"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/icons/profile.png';
+              }}
             />
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-col items-center justify-between gap-3 sm:flex-row sm:items-start">
                 <div>
                   <h1 className="text-2xl font-semibold text-ui-text-primary">
-                    {user.name}
+                    {user.name || "Anonymous Writer"}
                   </h1>
                   <p className="text-sm text-ui-text-secondary">
-                    @{user.username}
+                    @{user.username || "writer"}
                   </p>
                 </div>
 
-                <Link
-                  href="/me/profile/edit"
-                  className="shrink-0 rounded-sm bg-ui-btn-bg-secondary px-4 py-1.5 text-sm text-ui-btn-text-primary transition hover:bg-ui-btn-bg-secondary-hover"
-                >
-                  Edit profile
-                </Link>
-                {/* <button className="" onClick={logout}>Logout</button> */}
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/me/profile/edit"
+                    className="inline-flex items-center gap-1.5 shrink-0 rounded-sm bg-ui-btn-bg-secondary px-3.5 py-1.5 text-sm text-ui-btn-text-primary transition hover:bg-ui-btn-bg-secondary-hover"
+                  >
+                    <Settings size={14} />
+                    Edit profile
+                  </Link>
+
+                  <button
+                    onClick={handleLogout}
+                    className="inline-flex items-center gap-1.5 shrink-0 rounded-sm bg-ui-bg-secondary px-3.5 py-1.5 text-sm text-ui-text-primary transition hover:bg-red-500/10 hover:text-red-600"
+                    title="Log out"
+                  >
+                    <LogOut size={14} />
+                    Logout
+                  </button>
+                </div>
               </div>
 
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-ui-text-secondary">
-                {user.bio}
-              </p>
-
-              {blogs.length > 0 && (
-                <div className="mt-5 flex items-center justify-center gap-6 sm:justify-start">
-                  <ProfileStat label="Posts" value={blogs.length} />
-                  <ProfileStat label="Views" value={totalViews} />
-                  <ProfileStat label="Likes" value={totalLikes} />
-                </div>
+              {user.bio ? (
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-ui-text-secondary">
+                  {user.bio}
+                </p>
+              ) : (
+                <p className="mt-3 max-w-md text-sm italic text-ui-text-secondary/70">
+                  No bio yet. Click &ldquo;Edit profile&rdquo; to add a bio.
+                </p>
               )}
+
+              <div className="mt-5 flex items-center justify-center gap-6 sm:justify-start">
+                <ProfileStat label="Posts" value={posts.length} />
+                <ProfileStat label="Views" value={totalViews} />
+                <ProfileStat label="Likes" value={totalLikes} />
+              </div>
 
               <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 sm:justify-start">
                 {user.email && (
@@ -249,26 +249,124 @@ export default function ProfilePage() {
           </div>
         </section>
 
+        {/* Posts Section */}
         <section className="mt-10">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-ui-text-primary">
-              {blogs.length > 0 ? `Posts by ${user.name}` : "Posts"}
-            </h2>
-            {blogs.length > 0 && (
-              <Link
-                href="/me/write"
-                className="text-sm text-ui-text-secondary transition hover:text-ui-text-secondary-hover"
-              >
-                Write a new post
-              </Link>
-            )}
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-ui-text-primary">
+                Posts ({posts.length})
+              </h2>
+
+              {posts.length > 0 && (
+                <div className="flex rounded-sm bg-ui-bg-secondary p-1 text-xs">
+                  <button
+                    onClick={() => setActiveTab("all")}
+                    className={`rounded-sm px-2.5 py-1 transition ${
+                      activeTab === "all"
+                        ? "bg-ui-btn-bg-primary text-ui-btn-text-primary font-medium"
+                        : "text-ui-text-secondary hover:text-ui-text-primary"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("published")}
+                    className={`rounded-sm px-2.5 py-1 transition ${
+                      activeTab === "published"
+                        ? "bg-ui-btn-bg-primary text-ui-btn-text-primary font-medium"
+                        : "text-ui-text-secondary hover:text-ui-text-primary"
+                    }`}
+                  >
+                    Published
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("draft")}
+                    className={`rounded-sm px-2.5 py-1 transition ${
+                      activeTab === "draft"
+                        ? "bg-ui-btn-bg-primary text-ui-btn-text-primary font-medium"
+                        : "text-ui-text-secondary hover:text-ui-text-primary"
+                    }`}
+                  >
+                    Drafts
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <Link
+              href="/me/write"
+              className="inline-flex items-center gap-1.5 rounded-sm bg-ui-btn-bg-primary px-3.5 py-1.5 text-sm font-medium text-ui-btn-text-primary transition hover:bg-ui-btn-bg-primary-hover"
+            >
+              <PenLine size={14} /> Write a new post
+            </Link>
           </div>
 
-          {blogs.length > 0 ? (
+          {isPostsLoading ? (
             <div className="flex flex-col gap-4">
-              {blogs.map((blog) => (
-                <BlogCard key={blog.id} blog={blog} />
-              ))}
+              <div className="h-28 rounded-sm bg-ui-card-secondary/50 animate-pulse" />
+              <div className="h-28 rounded-sm bg-ui-card-secondary/50 animate-pulse" />
+            </div>
+          ) : filteredPosts.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {filteredPosts.map((blog) => {
+                const targetHref = blog.status === "published" && blog.slug
+                  ? `/me/feed/${blog.slug}`
+                  : `/me/write?id=${blog._id}`
+
+                return (
+                  <Link
+                    key={blog._id}
+                    href={targetHref}
+                    className="group block rounded-sm bg-ui-card-secondary p-5 transition hover:bg-ui-card-tirtury"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-base font-medium text-ui-text-primary group-hover:underline">
+                        {blog.title}
+                      </h3>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-sm font-medium shrink-0 ${
+                          blog.status === "published"
+                            ? "bg-green-600/10 text-green-700"
+                            : "bg-yellow-600/15 text-yellow-800"
+                        }`}
+                      >
+                        {blog.status === "published" ? "Published" : "Draft"}
+                      </span>
+                    </div>
+
+                    {blog.excerpt && (
+                      <p className="mt-1.5 text-sm leading-relaxed text-ui-text-secondary line-clamp-2">
+                        {blog.excerpt}
+                      </p>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ui-text-secondary">
+                      <span>
+                        {new Date(blog.updatedAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Eye size={13} aria-hidden="true" />
+                        {formatCount(blog.views || 0)}
+                        <span className="sr-only"> views</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Heart size={13} aria-hidden="true" />
+                        {formatCount(blog.likesCount || 0)}
+                        <span className="sr-only"> likes</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageCircle size={13} aria-hidden="true" />
+                        {formatCount(blog.commentsCount || 0)}
+                        <span className="sr-only"> comments</span>
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           ) : (
             <StartWritingCard />

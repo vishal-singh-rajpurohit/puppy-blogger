@@ -17,13 +17,13 @@ const ViewsSchema = new Schema<Omit<IViews, 'userId' | 'postId'> & {
     postId: mongoose.Types.ObjectId,
 }>({
     userId: {
-        type: mongoose.Types.ObjectId,
-        ref: 'user',
+        type: Schema.Types.ObjectId,
+        ref: 'User',
         required: false
     },
     postId: {
-        type: mongoose.Types.ObjectId,
-        ref: 'user',
+        type: Schema.Types.ObjectId,
+        ref: 'Blog',
         required: true
     }
 }, { timestamps: true });

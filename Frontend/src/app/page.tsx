@@ -189,7 +189,7 @@ function StartWritingSection() {
         </p>
 
         <Link
-          href="/write"
+          href="/me/write"
           className="mt-7 inline-block rounded-sm bg-ui-btn-bg-primary px-7 py-3 text-base font-medium text-[#FAF6EC] transition-colors hover:bg-ui-btn-bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2318]"
           style={{ fontFamily: "var(--font-body)" }}
         >

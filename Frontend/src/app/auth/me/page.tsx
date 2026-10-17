@@ -56,7 +56,7 @@ function TextField({
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 export default function AuthPage() {
-    const { data } = useSession()
+    const { data, update } = useSession()
     const router = useRouter()
     const [form, setForm] = useState<FormState>(initialForm)
     const [error, setError] = useState<string | null>(null)
@@ -72,34 +72,37 @@ export default function AuthPage() {
 
         setIsSubmitting(true)
         try {
-            console.log('data: ', data)
-            console.log("(data as typeof data & AuthSessionUnion)?.access_token: ", (data as typeof data & AuthSessionUnion)?.access_token)
+            const token = (data as typeof data & AuthSessionUnion)?.access_token;
             const resp = await fetch(
                 `${BACKEND_URL}/auth/register/detail`,
                 {
                     method: "PUT",
                     credentials: "include",
                     body: JSON.stringify({
-                        username: form.username,
-                        name: form.name
+                        username: form.username.trim(),
+                        name: form.name.trim()
                     }),
                     headers: {
                         "Content-Type": "application/json",
-                        Authorization:
-                            `Bearer ${(data as typeof data & AuthSessionUnion)?.access_token}`
+                        ...(token ? { Authorization: `Bearer ${token}` } : {})
                     },
-
                 });
 
-            console.log(await resp)
             const result = await resp.json()
 
-            if (result.statusCode === 200) {
-                await signOut({});
-                router.push('/me/profile');
+            if (result.statusCode === 200 || result.success) {
+                if (update) {
+                    await update({
+                        name: form.name,
+                        username: form.username,
+                        incomplete: false
+                    });
+                }
+                window.location.href = "/me/feed";
+                return;
+            } else {
+                setError(result.message || "Failed to update profile details");
             }
-
-
         } catch (error) {
             console.log(error)
             setError("Something went wrong. Try again.")
@@ -111,29 +114,31 @@ export default function AuthPage() {
     useEffect(() => {
         async function debounce() {
             try {
-                if (form.username) {
+                if (form.username && form.username.trim().length >= 2) {
                     const resp = await fetch(
                         `${BACKEND_URL}/auth/check/username`,
                         {
                             method: "POST",
-                            body: JSON.stringify({ username: form.username }),
+                            body: JSON.stringify({ username: form.username.trim() }),
                             headers: {
                                 "Content-Type": "application/json"
                             }
                         }
                     );
-                    const data = await resp.json();
-                    if (!data.body.avilable) {
+                    const resData = await resp.json();
+                    if (resData?.body && !resData.body.avilable) {
                         setError("Username is already taken");
+                    } else if (error === "Username is already taken") {
+                        setError(null);
                     }
                 }
-            } catch (error) {
-                console.log("Error in searching username: ", error)
+            } catch (err) {
+                console.log("Error in searching username: ", err)
             }
         }
-        const timeout = setTimeout(debounce, 1500);
+        const timeout = setTimeout(debounce, 500);
         return () => clearTimeout(timeout)
-    }, [form, setForm])
+    }, [form.username])
 
     return (
         <main className="flex min-h-screen items-center justify-center bg-ui-bg-primary px-4 py-12">

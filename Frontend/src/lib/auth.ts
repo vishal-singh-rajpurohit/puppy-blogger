@@ -88,7 +88,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         strategy: "jwt"
     },
     callbacks: {
-        async jwt({ token, user }) {
+        async jwt({ token, user, trigger, session }) {
             if (user) {
                 const authUser = user as typeof user & {
                     accessToken?: string;
@@ -100,14 +100,23 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
                 token.access_token = authUser.accessToken;
                 token.refresh_token = authUser.refreshToken;
                 token.incomplete = authUser.incomplete;
+                token.name = authUser.name;
+                token.username = authUser.username;
             }
 
-            // console.log('token: ', token)
+            if (trigger === "update" && session) {
+                if (session.name) token.name = session.name;
+                if (session.username) token.username = session.username;
+                if (typeof session.incomplete === "boolean") token.incomplete = session.incomplete;
+            }
+
             return token;
         },
         async session({ session, token }) {
             if (session.user) {
                 session.user.id = token.userId as string;
+                if (token.name) session.user.name = token.name as string;
+                if (token.username) (session.user as any).username = token.username as string;
 
                 (session as any).access_token = token.access_token;
                 (session as any).refresh_token = token.refresh_token;

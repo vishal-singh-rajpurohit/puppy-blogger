@@ -32,10 +32,10 @@ export async function auth(req: Request, resp: Response, next: NextFunction) {
         let payload: string | JwtPayload;
 
         try {
-            payload = jwt.verify(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-        } catch (error) {
-            console.log('error in decoding paylod: ', error)
-            throw new Error('error in decoding paylod: ')
+            payload = jwt.verify(ACCESS_TOKEN, ACCESS_TOKEN_SECRET);
+        } catch {
+            resp.status(401).json({ message: "Unauthorized Access: Invalid or Expired Token" });
+            return;
         }
 
         if (!payload || typeof payload === 'string' || !payload._id) {
@@ -50,12 +50,41 @@ export async function auth(req: Request, resp: Response, next: NextFunction) {
             return;
         }
 
-        req.user = user
+        req.user = user as any;
 
-        next()
-    } catch (error) {
-        if (error instanceof Error) {
-            throw new Error("Unauthorized Access: ")
+        next();
+    } catch {
+        resp.status(401).json({ message: "Unauthorized Access" });
+        return;
+    }
+}
+
+export async function optionalAuth(req: Request, resp: Response, next: NextFunction) {
+    try {
+        let ACCESS_TOKEN = req.cookies.ACCESS_TOKEN || req.headers.authorization;
+
+        if (!ACCESS_TOKEN || !ACCESS_TOKEN_SECRET) {
+            return next();
         }
+
+        if (ACCESS_TOKEN.startsWith("Bearer ")) {
+            ACCESS_TOKEN = ACCESS_TOKEN.substring(7);
+        }
+
+        try {
+            const payload = jwt.verify(ACCESS_TOKEN, ACCESS_TOKEN_SECRET) as JwtPayload;
+            if (payload && typeof payload !== 'string' && payload._id) {
+                const user = await User.findById(payload._id);
+                if (user) {
+                    req.user = user as any;
+                }
+            }
+        } catch {
+            // Ignore error for optional auth
+        }
+
+        next();
+    } catch {
+        next();
     }
 }

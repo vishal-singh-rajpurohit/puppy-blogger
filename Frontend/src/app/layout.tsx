@@ -15,17 +15,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`h-full`}>
       <body className="min-h-full flex flex-col bg-ui-bg-primary">
-        <Header />
         <SessionProvider>
           <QueryProvider>
             <Provider store={store()} >
               <AppProvider>
-                {children}
+                <Header />
+                <main className="flex-1">
+                  {children}
+                </main>
+                <Footer />
               </AppProvider>
             </Provider>
           </QueryProvider>
         </SessionProvider>
-        <Footer />
       </body>
     </html>
   );

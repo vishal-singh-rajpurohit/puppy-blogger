@@ -21,13 +21,13 @@ const CommentSchema = new Schema<Omit<IComments, 'userId' | 'postId'> & {
     postId: Types.ObjectId;
 }>({
     postId: {
-        type: mongoose.Types.ObjectId,
-        ref: 'post',
+        type: Schema.Types.ObjectId,
+        ref: 'Blog',
         required: true
     },
     userId: {
-        type: mongoose.Types.ObjectId,
-        ref: 'user',
+        type: Schema.Types.ObjectId,
+        ref: 'User',
         required: true
     },
     comment: {

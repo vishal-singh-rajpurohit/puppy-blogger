@@ -146,19 +146,13 @@ export default function AuthPage() {
             });
 
             if (result?.error) {
-                setError(result.error);
+                setError("Invalid credentials or user already exists");
                 return;
             }
 
-            if (session && session.user) {
-                const authSession = session as typeof session & {
-                    accessToken?: string;
-                    refreshToken?: string;
-                    incomplete?: boolean;
-                };
-
-                if (authSession.incomplete) { roter.push('/auth/me') }
-                if (!authSession.incomplete) { roter.push('/') }
+            if (result?.ok) {
+                window.location.href = "/me/feed";
+                return;
             }
 
 

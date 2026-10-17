@@ -9,14 +9,15 @@ import { z } from "zod";
 ========================= */
 
 const UserValidationSchema = z.object({
-    name: z.string().min(2).max(20).trim(),
+    name: z.string().max(50).trim().optional(),
 
     username: z
         .string()
         .min(2)
         .max(20)
         .trim()
-        .toLowerCase(),
+        .toLowerCase()
+        .optional(),
 
     email: z
         .string()
@@ -26,6 +27,12 @@ const UserValidationSchema = z.object({
         .string()
         .min(8)
         .trim(),
+
+    bio: z.string().max(500).optional(),
+    avatarUrl: z.string().optional(),
+    website: z.string().optional(),
+    github: z.string().optional(),
+    twitter: z.string().optional(),
 
     refresh_token: z.string().optional(),
 
@@ -65,12 +72,14 @@ const UserSchema = new Schema<
     {
         name: {
             type: String,
-            required: false
+            required: false,
+            default: ""
         },
 
         username: {
             type: String,
             required: false,
+            sparse: true,
             unique: true
         },
 
@@ -83,6 +92,31 @@ const UserSchema = new Schema<
         password_hash: {
             type: String,
             required: true
+        },
+
+        bio: {
+            type: String,
+            default: ""
+        },
+
+        avatarUrl: {
+            type: String,
+            default: ""
+        },
+
+        website: {
+            type: String,
+            default: ""
+        },
+
+        github: {
+            type: String,
+            default: ""
+        },
+
+        twitter: {
+            type: String,
+            default: ""
         },
 
         refresh_token: {

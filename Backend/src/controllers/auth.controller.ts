@@ -74,7 +74,7 @@ const authCheck = asyncHandler(async (req: Request, resp: Response,) => {
 
         resp.status(200).json(new APIRepsonse(200, {
             user: finalUser,
-            incomplete: Boolean(finalUser.username),
+            incomplete: !finalUser.username,
             access_token: ACCESS_TOKEN,
             refresh_token: REFRESH_TOKEN
         }, "User Logged In Successfully"))
@@ -84,6 +84,81 @@ const authCheck = asyncHandler(async (req: Request, resp: Response,) => {
         throw new Error("Error in Auth Cheking: ")
     }
 
+});
+
+const getProfile = asyncHandler(async (req: Request, resp: Response) => {
+    try {
+        if (!req.user) {
+            resp.status(401).json(new APIRepsonse(401, null, "Unauthorized Access"));
+            return;
+        }
+
+        const user = await User.findById(req.user._id).select("-password_hash -refresh_token -access_token");
+
+        if (!user) {
+            resp.status(404).json(new APIRepsonse(404, null, "User not found"));
+            return;
+        }
+
+        resp.status(200).json(new APIRepsonse(200, {
+            user,
+            incomplete: !user.username
+        }, "Profile fetched successfully"));
+    } catch (error) {
+        if (error instanceof Error) throw new Error("Error in getting Profile: " + error.message);
+        throw new Error("Error in getting Profile");
+    }
+});
+
+const updateProfile = asyncHandler(async (req: Request, resp: Response) => {
+    try {
+        if (!req.user) {
+            resp.status(401).json(new APIRepsonse(401, null, "Unauthorized Access"));
+            return;
+        }
+
+        const { name, username, bio, website, github, twitter, avatarUrl } = req.body;
+
+        if (username) {
+            const trimmedUsername = username.trim().toLowerCase();
+            const existing = await User.findOne({
+                username: trimmedUsername,
+                _id: { $ne: req.user._id }
+            });
+            if (existing) {
+                resp.status(409).json(new APIRepsonse(409, null, "Username is already taken"));
+                return;
+            }
+        }
+
+        const updateData: Record<string, unknown> = {};
+        if (name !== undefined) updateData.name = name.trim();
+        if (username !== undefined) updateData.username = username.trim().toLowerCase();
+        if (bio !== undefined) updateData.bio = bio;
+        if (website !== undefined) updateData.website = website;
+        if (github !== undefined) updateData.github = github;
+        if (twitter !== undefined) updateData.twitter = twitter;
+        if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user._id,
+            { $set: updateData },
+            { returnDocument: 'after' }
+        ).select("-password_hash -refresh_token -access_token");
+
+        if (!updatedUser) {
+            resp.status(501).json(new APIRepsonse(501, null, "Cannot update profile"));
+            return;
+        }
+
+        resp.status(200).json(new APIRepsonse(200, {
+            user: updatedUser,
+            incomplete: !updatedUser.username
+        }, "Profile updated successfully"));
+    } catch (error) {
+        if (error instanceof Error) throw new Error("Error in updating Profile: " + error.message);
+        throw new Error("Error in updating Profile");
+    }
 });
 
 const checkEmail = asyncHandler(async (req: Request, resp: Response,) => {
@@ -212,7 +287,7 @@ const registerEmail = asyncHandler(async (req: Request, resp: Response,) => {
             return;
         }
 
-        await sendRegistrationEmail(finalUser.email, finalUser.username)
+        await sendRegistrationEmail(finalUser.email, finalUser.username || "Blogger")
 
         resp.status(200).json(new APIRepsonse(200, {
             user: finalUser
@@ -493,7 +568,7 @@ const oauthLogin = asyncHandler(async (req: Request, resp: Response,) => {
                 throw new Error("Internal Server Error ", { cause: "Final User Error" });
             }
 
-            await sendRegistrationEmail(finalUser.email, finalUser.username)
+            await sendRegistrationEmail(finalUser.email, finalUser.username || "Blogger")
 
 
 
@@ -720,6 +795,7 @@ const getMyPosts = asyncHandler(async (req: Request, resp: Response) => {
                 $project: {
                     title: 1,
                     excerpt: 1,
+                    slug: 1,
                     updatedAt: 1,
                     status: 1,
                     commentsCount: 1,
@@ -883,8 +959,8 @@ const resetPassword = asyncHandler(async (req: Request, resp: Response) => {
         }
 
         await sendPasswordResetSuccessEmail(user.email, {
-            username: user.username,
-            supportUrl: process.env.BASE_URL + "contact-us"
+            ...(user.username ? { username: user.username } : {}),
+            supportUrl: (process.env.BASE_URL || "http://localhost:3000/") + "about"
         });
 
         resp.clearCookie('RESET_TOKEN')
@@ -895,8 +971,59 @@ const resetPassword = asyncHandler(async (req: Request, resp: Response) => {
     }
 })
 
+const refreshToken = asyncHandler(async (req: Request, resp: Response) => {
+    try {
+        const token = req.cookies.REFRESH_TOKEN || req.body.refresh_token;
+
+        if (!token) {
+            resp.status(401).json(new APIRepsonse(401, null, "Refresh Token Required"));
+            return;
+        }
+
+        let decoded;
+        try {
+            decoded = decodeRefreshToken(token);
+        } catch {
+            resp.status(401).json(new APIRepsonse(401, null, "Invalid Refresh Token"));
+            return;
+        }
+
+        if (!decoded || typeof decoded === 'string' || !decoded._id) {
+            resp.status(401).json(new APIRepsonse(401, null, "Invalid Refresh Token Payload"));
+            return;
+        }
+
+        const user = await User.findById(decoded._id);
+
+        if (!user || user.refresh_token !== token) {
+            resp.status(401).json(new APIRepsonse(401, null, "Refresh Token expired or invalid"));
+            return;
+        }
+
+        const ACCESS_TOKEN = await user.createAccessToken();
+        const REFRESH_TOKEN = await user.createRefreshToken();
+
+        user.refresh_token = REFRESH_TOKEN;
+        await user.save();
+
+        resp.cookie("ACCESS_TOKEN", ACCESS_TOKEN, ACCESS_TOKEN_COOKIE_OPTIONS);
+        resp.cookie("REFRESH_TOKEN", REFRESH_TOKEN, REFRESH_TOKEN_COOKIE_OPTIONS);
+
+        resp.status(200).json(new APIRepsonse(200, {
+            access_token: ACCESS_TOKEN,
+            refresh_token: REFRESH_TOKEN
+        }, "Token refreshed successfully"));
+    } catch (error) {
+        if (error instanceof Error) throw new Error("Error in refreshing token: " + error.message);
+        throw new Error("Error in refreshing token");
+    }
+});
+
 export default {
     authCheck,
+    getProfile,
+    updateProfile,
+    refreshToken,
     checkEmail,
     checkUsername,
     registerEmail,

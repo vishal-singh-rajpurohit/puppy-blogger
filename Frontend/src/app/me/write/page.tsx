@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import {
     Heading1,
     Heading2,
@@ -12,10 +14,15 @@ import {
     Trash2,
     ChevronUp,
     ChevronDown,
+    Save,
+    Send,
+    ImageIcon as CoverIcon,
     type LucideIcon,
 } from "lucide-react"
 
 import { PostType, BlockType, ListBlockType, TextBlockType } from "../../../types/blog.types"
+import { postAPICall } from "@/lib/api"
+import { AuthSessionUnion } from "@/types/authSession.types"
 
 const ProgrammingLanguages = [
     "bash", "c", "c#", "cpp", "css", "docker", "go",
@@ -353,8 +360,16 @@ function ElementsBlock({ addBlock }: { addBlock: (type: BlockType) => void }) {
 }
 
 export default function WritePage() {
+    const { data: session } = useSession()
+    const router = useRouter()
+
     const [title, setTitle] = useState("")
     const [blocks, setBlocks] = useState<Block[]>([])
+    const [coverImage, setCoverImage] = useState("")
+    const [showCoverInput, setShowCoverInput] = useState(false)
+    const [isPublishing, setIsPublishing] = useState(false)
+    const [isSavingDraft, setIsSavingDraft] = useState(false)
+    const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
     function updateBlock(id: string, next: Block) {
         setBlocks((prev) => prev.map((b) => (b.id === id ? next : b)))
@@ -379,15 +394,81 @@ export default function WritePage() {
         setBlocks((prev) => [...prev, createBlock(type)])
     }
 
-    function handlePublish() {
-        const post = buildPost(title, blocks)
-        // Replace with a real API call, e.g.:
-        // await fetch("/api/posts", {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json" },
-        //   body: JSON.stringify(post),
-        // })
-        console.log(post)
+    async function handlePublish() {
+        if (!title.trim()) {
+            setStatusMessage({ type: "error", text: "Please enter a title for your post before publishing." })
+            return
+        }
+        if (blocks.length === 0) {
+            setStatusMessage({ type: "error", text: "Please add some content to your post before publishing." })
+            return
+        }
+
+        setIsPublishing(true)
+        setStatusMessage(null)
+
+        try {
+            const post = buildPost(title.trim(), blocks)
+            const res = await postAPICall<any>(
+                "/blog/new",
+                {
+                    title: post.title,
+                    body: post.body,
+                    status: "published",
+                    ...(coverImage.trim() ? { coverImage: coverImage.trim() } : {}),
+                },
+                session as typeof session & AuthSessionUnion
+            )
+
+            if (res && (res.statusCode === 201 || res.statusCode === 200 || res.success)) {
+                const slug = res.body?.blog?.slug
+                if (slug) {
+                    router.push(`/me/feed/${slug}`)
+                } else {
+                    router.push("/me/feed")
+                }
+            } else {
+                setStatusMessage({ type: "error", text: res?.message || "Failed to publish post. Please try again." })
+            }
+        } catch {
+            setStatusMessage({ type: "error", text: "Something went wrong while publishing your post." })
+        } finally {
+            setIsPublishing(false)
+        }
+    }
+
+    async function saveDraft() {
+        if (!title.trim()) {
+            setStatusMessage({ type: "error", text: "Please provide a title to save your draft." })
+            return
+        }
+
+        setIsSavingDraft(true)
+        setStatusMessage(null)
+
+        try {
+            const post = buildPost(title.trim(), blocks)
+            const res = await postAPICall<any>(
+                "/blog/new",
+                {
+                    title: post.title,
+                    body: post.body,
+                    status: "draft",
+                    ...(coverImage.trim() ? { coverImage: coverImage.trim() } : {}),
+                },
+                session as typeof session & AuthSessionUnion
+            )
+
+            if (res && (res.statusCode === 201 || res.statusCode === 200 || res.success)) {
+                setStatusMessage({ type: "success", text: "Draft saved successfully!" })
+            } else {
+                setStatusMessage({ type: "error", text: res?.message || "Failed to save draft." })
+            }
+        } catch {
+            setStatusMessage({ type: "error", text: "Something went wrong while saving your draft." })
+        } finally {
+            setIsSavingDraft(false)
+        }
     }
 
     return (
@@ -395,6 +476,19 @@ export default function WritePage() {
             <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10 lg:flex-row lg:px-10">
                 <ElementsBlock addBlock={addBlock} />
                 <div className="min-w-0 flex-1">
+                    {/* Status notifications */}
+                    {statusMessage && (
+                        <div
+                            className={`mb-6 rounded-sm p-4 text-sm ${
+                                statusMessage.type === "success"
+                                    ? "bg-green-600/10 text-green-700"
+                                    : "bg-red-500/10 text-red-600"
+                            }`}
+                        >
+                            {statusMessage.text}
+                        </div>
+                    )}
+
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <input
                             value={title}
@@ -405,18 +499,69 @@ export default function WritePage() {
                         <div className="flex shrink-0 gap-2">
                             <button
                                 type="button"
-                                className="rounded-sm bg-ui-btn-bg-secondary px-4 py-2 text-sm font-medium text-ui-btn-text-primary transition hover:bg-ui-btn-bg-secondary-hover"
+                                onClick={saveDraft}
+                                disabled={isSavingDraft || isPublishing}
+                                className="inline-flex items-center gap-1.5 rounded-sm bg-ui-btn-bg-secondary px-4 py-2 text-sm font-medium text-ui-btn-text-primary transition hover:bg-ui-btn-bg-secondary-hover disabled:opacity-60"
                             >
-                                Save draft
+                                <Save size={14} />
+                                {isSavingDraft ? "Saving..." : "Save draft"}
                             </button>
                             <button
                                 type="button"
                                 onClick={handlePublish}
-                                className="rounded-sm bg-ui-btn-bg-primary px-4 py-2 text-sm font-medium text-ui-btn-text-primary transition hover:bg-ui-btn-bg-primary-hover"
+                                disabled={isPublishing || isSavingDraft}
+                                className="inline-flex items-center gap-1.5 rounded-sm bg-ui-btn-bg-primary px-4 py-2 text-sm font-medium text-ui-btn-text-primary transition hover:bg-ui-btn-bg-primary-hover disabled:opacity-60"
                             >
-                                Publish
+                                <Send size={14} />
+                                {isPublishing ? "Publishing..." : "Publish"}
                             </button>
                         </div>
+                    </div>
+
+                    {/* Cover Image Toggle and Input */}
+                    <div className="mt-4">
+                        {!showCoverInput && !coverImage ? (
+                            <button
+                                type="button"
+                                onClick={() => setShowCoverInput(true)}
+                                className="inline-flex items-center gap-1.5 text-xs text-ui-text-secondary hover:text-ui-text-primary transition"
+                            >
+                                <CoverIcon size={14} /> Add cover image URL
+                            </button>
+                        ) : (
+                            <div className="flex flex-col gap-2 rounded-sm bg-ui-card-secondary p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <input
+                                        type="url"
+                                        value={coverImage}
+                                        onChange={(e) => setCoverImage(e.target.value)}
+                                        placeholder="Cover image URL (e.g. https://images.unsplash.com/...)"
+                                        className="w-full bg-transparent text-sm text-ui-text-primary outline-none placeholder:text-ui-text-secondary"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCoverImage("")
+                                            setShowCoverInput(false)
+                                        }}
+                                        className="text-xs text-ui-text-secondary hover:text-red-500 shrink-0"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                                {coverImage && (
+                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                    <img
+                                        src={coverImage}
+                                        alt="Cover preview"
+                                        className="max-h-48 w-full rounded-sm object-cover"
+                                        onError={(e) => {
+                                            (e.target as HTMLElement).style.display = 'none';
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="mt-8 flex flex-col gap-1">

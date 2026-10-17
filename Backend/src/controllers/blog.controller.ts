@@ -24,17 +24,19 @@ const createNewBlog = asyncHandler(async (req: Request, resp: Response) => {
             return;
         }
 
-        const { title, body } = req.body;
+        const { title, body, status, coverImage } = req.body;
 
         if (!title || !body) {
-            resp.status(400).json(new APIRepsonse(400, { success: false }, "Title and Body both requied"))
+            resp.status(400).json(new APIRepsonse(400, { success: false }, "Title and Body both required"))
             return;
         }
 
         const newBlog = new Blog({
             title,
             body,
-            author: user._id
+            author: user._id,
+            status: status === "published" ? "published" : "draft",
+            ...(coverImage ? { coverImage } : {})
         })
 
         await newBlog.save();
@@ -159,10 +161,15 @@ const getFeed = asyncHandler(async (req: Request, resp: Response) => {
                 }
             },
             {
-                $skip: Number(page) * (Number(limit) + 1)
+                $sort: {
+                    createdAt: -1
+                }
             },
             {
-                $limit: Number(limit) + 1
+                $skip: Number(page) * Number(limit)
+            },
+            {
+                $limit: Number(limit)
             },
             {
                 $lookup: {
@@ -243,14 +250,9 @@ const getFeed = asyncHandler(async (req: Request, resp: Response) => {
 
         console.log(blogs)
 
-        if (!blogs[0]) {
-            resp.status(404).json(new APIRepsonse(404, { success: false }, "Blog not found"))
-            return
-        }
-
         resp.status(200).json(new APIRepsonse(200, {
             success: true,
-            blog: blogs
+            blog: blogs || []
         }, "Blogs Found"))
     } catch (error) {
         console.log(error);
@@ -377,10 +379,16 @@ const getBlog = asyncHandler(async (req: Request, resp: Response) => {
                 userId: user._id
             })
 
+            const isLiked = await Like.exists({
+                postId: blog._id,
+                userId: user._id
+            })
+
             resp.status(200).json(new APIRepsonse(200, {
                 success: true,
                 blog: blog,
-                isViewed: !!isWatched
+                isViewed: !!isWatched,
+                isLiked: !!isLiked
             }, "Blog Found"))
             return
         }
@@ -397,7 +405,9 @@ const getBlog = asyncHandler(async (req: Request, resp: Response) => {
 
         resp.status(200).json(new APIRepsonse(200, {
             success: true,
-            blog: blog
+            blog: blog,
+            isViewed: false,
+            isLiked: false
         }, "Blog Found"))
     } catch (error) {
         console.log(error);
@@ -493,22 +503,16 @@ const dislikeBlog = asyncHandler(async (req: Request, resp: Response) => {
             return
         }
 
-        const like = await Like.findOneAndDelete({
+        await Like.findOneAndDelete({
             postId: blog._id,
             userId: user._id
         })
 
-
-        if (!like) {
-            resp.status(404).json(new APIRepsonse(404, { success: false }, "Error in creating Like"))
-            return
-        }
-
-        resp.status(200).json(new APIRepsonse(200, { success: true }, "Liked Successfully"))
+        resp.status(200).json(new APIRepsonse(200, { success: true }, "Unliked Successfully"))
 
     } catch (error) {
         console.log(error);
-        throw new Error("Error in Like Blog")
+        throw new Error("Error in Dislike Blog")
     }
 });
 
@@ -542,7 +546,7 @@ const commentBlog = asyncHandler(async (req: Request, resp: Response) => {
 
         const { comment } = req.body;
 
-        if (!comment) {
+        if (!comment || typeof comment !== 'string' || !comment.trim()) {
             resp.status(400).json(new APIRepsonse(400, { success: false }, "Comment Required"))
             return
         }
@@ -550,20 +554,16 @@ const commentBlog = asyncHandler(async (req: Request, resp: Response) => {
         const newComment = new Comments({
             postId: blog._id,
             userId: user._id,
-            comment: comment
+            comment: comment.trim()
         })
 
         await newComment.save()
-
-        if (!newComment) {
-            resp.status(404).json(new APIRepsonse(404, { success: false }, "Error in creating Like"))
-            return
-        }
+        await newComment.populate('userId', 'name username avatarUrl')
 
         resp.status(200).json(new APIRepsonse(200, {
             success: true,
             comment: newComment
-        }, "Liked Successfully"))
+        }, "Comment added Successfully"))
 
     } catch (error) {
         console.log(error);
@@ -580,68 +580,11 @@ const getComments = asyncHandler(async (req: Request, resp: Response) => {
             return;
         }
 
-        const comments = await Blog.aggregate([
-            {
-                $match: {
-                    _id: new mongoose.Types.ObjectId(id)
-                }
-            },
-            {
-                $lookup: {
-                    from: 'comments',
-                    localField: '_id',
-                    foreignField: 'postId',
-                    as: 'comments',
-                    pipeline: [
-                        {
-                            $lookup: {
-                                from: 'users',
-                                localField: 'userId',
-                                foreignField: '_id',
-                                as: 'user',
-                                pipeline: [
-                                    {
-                                        $project: {
-                                            password_hash: 0,
-                                            access_token: 0,
-                                            refresh_token: 0,
-                                            createdAt: 0,
-                                            updatedAt: 0,
-                                            email: 0,
-                                            name: 0,
-                                            __v: 0
-                                        }
-                                    }
-                                ]
-                            }
-                        },
-                        {
-                            $unwind: {
-                                path: '$user',
-                                preserveNullAndEmptyArrays: true
-                            }
-                        }
-                    ]
-                }
-            },
-            {
-                $unwind: {
-                    path: '$comments',
-                    preserveNullAndEmptyArrays: true
-                }
-            },
-            {
-                $project: {
-                    comments: 1
-                }
-            }
-        ])
+        const comments = await Comments.find({ postId: new mongoose.Types.ObjectId(id) })
+            .populate('userId', 'name username avatarUrl')
+            .sort({ createdAt: -1 });
 
-        if (!comments) {
-            resp.status(400).json(new APIRepsonse(400, { success: false }, 'Cannot get comments'))
-        }
-
-        resp.status(200).json(new APIRepsonse(400, {
+        resp.status(200).json(new APIRepsonse(200, {
             comments: comments,
             success: true
         }, 'Here are comments'))

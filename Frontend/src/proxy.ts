@@ -6,6 +6,7 @@ import { AuthSessionUnion } from './types/authSession.types';
 
 const AUTH_ROUTES = ['/me']
 
+
 export async function proxy(request: NextRequest) {
     const session = await auth() as Session & AuthSessionUnion;
 
@@ -14,32 +15,35 @@ export async function proxy(request: NextRequest) {
 
     if (session && session.user) {
         if (session.incomplete && pathname !== '/auth/me') {
+            console.log('redirecting from : 1');
             const url = new URL('/auth/me', request.url)
             url.searchParams.set('callbackUrl', pathname)
             return NextResponse.redirect(new URL(url))
         }
         if (!session.incomplete && pathname === '/auth/me') {
+            console.log('redirecting from : 2');
             const url = new URL('/me/profile/', request.url)
             url.searchParams.set('callbackUrl', pathname)
             return NextResponse.redirect(new URL(url))
         }
         if (isAuthRoute) {
+            console.log('redirecting from : 3');
             return NextResponse.next()
         }
-        if (pathname === "/") {
+        if (pathname === "/" || pathname === "/auth") {
             const url = new URL('/me/feed/', request.url)
-            url.searchParams.set('callbackUrl', pathname)
             return NextResponse.redirect(new URL(url))
         }
     }
 
-    if (isAuthRoute) {
+    else if (isAuthRoute) {
         const url = new URL('/auth', request.url)
         url.searchParams.set('callbackUrl', pathname)
         return NextResponse.redirect(new URL(url))
     }
 
-    if (pathname === '/auth/me') {
+    else if (pathname === '/auth/me') {
+        console.log('redirecting from : 5');
         const url = new URL('/auth', request.url)
         url.searchParams.set('callbackUrl', pathname)
         return NextResponse.redirect(new URL(url))

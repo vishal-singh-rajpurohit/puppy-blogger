@@ -22,8 +22,8 @@ const OTPSchema = new Schema<Omit<IOTP, 'userId'> & { userId: mongoose.Types.Obj
         trim: true
     },
     userId: {
-        type: mongoose.Types.ObjectId,
-        ref: 'user',
+        type: Schema.Types.ObjectId,
+        ref: 'User',
         required: true
     },
     expired: {
