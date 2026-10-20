@@ -5,7 +5,7 @@ import { server } from "./app.js"
 conn()
     .then(() => {
         console.log('connected to db');
-        const port = process.env.PORT;
+        const port = process.env.PORT || 5001;
         server.listen(port, () => {
             console.log(`server is running on: http://localhost:${port}`);
         })

@@ -1,0 +1,84 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: puppy-mongo
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - puppy-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: puppy-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-5001}:5001"
+    environment:
+      PORT: 5001
+      ATLAS_LINK: mongodb://mongo:27017/${MONGO_DATABASE:-puppy}
+      CORS_URL: ${CORS_URL:-http://localhost:3000}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:-ahdjkfhHJJKhiou798U8Y98yhCNAJKDHuiyuiuiy8Y8976tgt8TG8Y7fr6}
+      ACCESS_TOKEN_EXP: ${ACCESS_TOKEN_EXP:-1d}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-ahdjkfhHJJKhiou798U8Y98yhCNAJasdrweoiur93hJKIIIJIOUIO890778912}
+      REFRESH_TOKEN_EXP: ${REFRESH_TOKEN_EXP:-7d}
+      RESET_PASSWORD_SECRET: ${RESET_PASSWORD_SECRET:-ahdjkfhHJJK234ASDF2398yhCNAJKDHuiyuiuiy8Y8976tgt8TG8Y7fr6}
+      RESET_PASSWORD_EXP: ${RESET_PASSWORD_EXP:-5m}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-Puppy Blogs <onboarding@resend.dev>}
+      BASE_URL: ${BASE_URL:-http://localhost:3000}
+    env_file:
+      - path: .env
+        required: false
+      - path: ./Backend/.env
+        required: false
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - puppy-network
+
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:5001/api/v1}
+    container_name: puppy-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:5001/api/v1}
+      AUTH_SECRET: ${AUTH_SECRET:-22c02a163736b48ce8f4b6aa534b98b61ed70218ba2341b860f8d63f5776b5d8}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+    env_file:
+      - path: .env
+        required: false
+      - path: ./Frontend/.env
+        required: false
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - puppy-network
+
+networks:
+  puppy-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local

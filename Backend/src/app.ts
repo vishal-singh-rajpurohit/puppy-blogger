@@ -8,12 +8,13 @@ import { globalError } from "./middleware/global.middleware.js";
 export const server = express()
 
 
-const CORS_ORIGIN = process.env.CORS_URL;
-if (!CORS_ORIGIN) {
-    throw new Error("CORS_ORIGIN not provided")
-}
+const CORS_ORIGIN = process.env.CORS_URL || "http://localhost:3000";
+const allowedOrigins = CORS_ORIGIN.includes(",")
+    ? CORS_ORIGIN.split(",").map((s) => s.trim())
+    : CORS_ORIGIN;
+
 server.use(cors({
-    origin: CORS_ORIGIN,
+    origin: allowedOrigins,
     credentials: true
 }))
 server.use(express.json())
