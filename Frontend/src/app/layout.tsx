@@ -9,9 +9,14 @@ import QueryProvider from "../context/QueryClientContext";
 import { AppProvider } from "../context/AppContext";
 import { store } from "../context/store/store";
 import { SessionProvider } from "next-auth/react";
+import React from "react";
 
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" className={`h-full`}>
       <body className="min-h-full flex flex-col bg-ui-bg-primary">
