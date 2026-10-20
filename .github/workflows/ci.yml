@@ -156,7 +156,7 @@ jobs:
 
             echo "==> Building and restarting Docker containers <=="
             docker compose -f ./docker-compose.prod.yml down --remove-orphans
-            docker compose -f ./docker-compose.prod.yml up -f -d --build
+            docker compose ./docker-compose.prod.yml up -f -d --build
 
             echo "==> Cleaning up unused Docker images <=="
             docker image prune -f
